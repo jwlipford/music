@@ -1052,7 +1052,7 @@ void try_read_file (
         }
     }
     else {
-        widthInt = INT_MAX;
+        widthInt = INT_MAX; // Will be ignored
     }
 
     // Open file
