@@ -36,7 +36,7 @@ const char* STR_ENCODING =
 "  Note (2 bytes):\n"
 "    Bits 1-2:   Always 01\n"
 "    Bits 3-6:   Rest (0) or pitches B to B to B (1 to 15)\n"
-"    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp (#) (3)\n"
+"    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp ('#') (3)\n"
 "    Bits 9-12:\n"
 "      Appearance - Invalid (0), unused (1), Breve (2), whole (3), half (4), quarter (5), eighth (6-14 even),\n"
 "      sixteenth (7-15 odd). For eighths and sixteenths, there are five encodings each that indicate whether\n"
@@ -92,7 +92,7 @@ const char EXAMPLE_BYTES[] = {
     0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
     0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
     0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b0000101, // Low E, quarter
+    0b00010001, 0b00000101, // Low E, quarter
     0b00000100, // Single barline
     0b00000001, 0b00000110, // Eighth rest
     0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
@@ -247,7 +247,7 @@ inline char note_has_long_stem (
 }
 
 inline char note_orientation (
-    unsigned char byte1 // Bits  1-8 of note encoding.
+    unsigned char byte1 // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
     // Returns 1 or -1. If 1, the stem (if it exists) is on top and the articulation (if it exists) is on the bottom.
 ){
     return (notehead_row (byte1) <= ROW_MD_B) ? 1 : -1;
@@ -272,7 +272,7 @@ const char ACCIDENTAL_CHARS[] = { 1, 'b', '~', '#' }; // Existing/none, flat, na
 
 inline char pre_notehead_character (
     unsigned char byte1,   // Bits 1-8 of note encoding. Bits 3-8 are relevant here.
-    unsigned char prevTied // Whether the previous note is tied to this one
+    unsigned char prevTied // Whether the previous note is tied to this one.
     // Returns the character to use left of the notehead, or ASCII character 1 if existing
     // character should be used.
 ){
@@ -284,6 +284,8 @@ const char ARTICULATION_CHARS[] = { 1, '.', '>', '=' }; // Existing/none, stacca
 
 inline char articulation_notehead_character (
     unsigned char byte2  // Bits 9-16 of note encoding. Bits 15-16 are relevant here.
+    // Returns the character to use above/below the notehead, or ASCII character 1 if existing
+    // character should be used.
 ){
     return ARTICULATION_CHARS[byte2 >> 6]; // Index is bits 15-16
 }
@@ -354,7 +356,7 @@ char stem_height (
 void draw_row (
     char* pText, // (Pointer to) a noteblock's 2D array text
     char  row,   // Row number (0-15)
-    // Below: Characters to copy to the 5-character long row. Pass 1 to use existing value.
+    // Below: Characters to copy to the 5-character long row. Pass 1 to keep existing char.
     char c0, char c1, char c2, char c3, char c4
 ){
     char* pTextRow = pText + (row * NOTEBLOCK_WIDTH);
@@ -391,7 +393,7 @@ inline void draw_row_error (
 // "Draw" functions
 
 void draw_staff (
-    char*         pText,          // (Pointer to) a noteblock's 2D array of text, in which to draw the staff
+    char*         pText,          // (Pointer to) a noteblock's 2D array of text, in which to draw the staff.
     char          width,          // Width of noteblock. If less than 5, remaining column(s) will be filled with '\0's.
     unsigned char ledgerLineFlags // 1st bit: Whether bottom (low C) ledger line is needed.
                                   // 2nd bit: Whether top (high A) ledger line is needed.
@@ -541,10 +543,10 @@ void draw_articulation (
 
 
 void draw_notehead (
-    char*         pText,   // (Pointer to) a noteblock's 2D array text, in which to draw the notehead
-    unsigned char byte1,   // Bits 1-8 of note encoding
-    unsigned char byte2,   // Bits 9-16 of note encoding
-    unsigned char prevTied // Whether the previous note is tied to this one
+    char*         pText,   // (Pointer to) a noteblock's 2D array text, in which to draw the notehead.
+    unsigned char byte1,   // Bits 1-8 of note encoding.
+    unsigned char byte2,   // Bits 9-16 of note encoding.
+    unsigned char prevTied // Whether the previous note is tied to this one.
     // Draws a 3-character notehead, as well as the characters to the left and right, for 5 total.
 ){
     char preNoteheadChar, leftChar, fillChar, rightChar, postNoteheadChar; // 5 characters to draw
@@ -572,16 +574,14 @@ void draw_notehead (
 
 
 void draw_stem_flags_beams (
-    char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw the stem.
+    char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw.
     unsigned char byte1,         // Bits 1-8 of note encoding.
     unsigned char byte2,         // Bits 9-16 of note encoding.
     char          countLeftBeams // How many beams (0-2) this note should have on the left, if beamed.
     // Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
 ){
     char stemHeight = stem_height (byte1, byte2);
-    if (stemHeight == 0) {
-        return;
-    }
+    if (stemHeight == 0) { return; }
     char noteheadRow = notehead_row (byte1);
     char orientation = note_orientation (byte1);
     char stemTopRow = noteheadRow + (orientation * stemHeight); // "top" meaning farthest from notehead
@@ -673,7 +673,7 @@ struct noteblock* make_note (
     char noteheadRow = notehead_row (byte1);
     unsigned char ledgerLineFlags = // 1st bit for low ledger line, 2nd bit for high ledger line
         (noteheadRow <= ROW_LO_C && noteheadRow != ROW_TEXT) + ((ROW_HI_A <= noteheadRow) << 1);
-    draw_staff (pText, 5, ledgerLineFlags);
+    draw_staff (pText, NOTEBLOCK_WIDTH, ledgerLineFlags);
 
     if (is_rest (byte1)) {
         draw_rest (pText, byte2);
@@ -725,7 +725,7 @@ struct noteblock* make_key_signature (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    draw_staff (pText, 5, 0);
+    draw_staff (pText, NOTEBLOCK_WIDTH, 0);
 
     const char LAST_IDX = sizeof (KEY_SIGNATURE_ROWS) - 1;
     char dir = (bits01to16 & 0b100) ? -1 : 1; // Loop backwards or forwards through KEY_SIGNATURE_ROWS
@@ -735,9 +735,9 @@ struct noteblock* make_key_signature (
         char charToDraw =
             (bits01to16 & (1 << row)) ? (
                 (bits17to32 & (1 << row)) ? '~' : 'b'
-                ) : (
-                    (bits17to32 & (1 << row)) ? '#' : 1
-                    );
+            ) : (
+                (bits17to32 & (1 << row)) ? '#' : 1
+            );
         if (charToDraw != 1) {
             switch (col) {
                 case 0: draw_row (pText, row, charToDraw, 1, 1, 1, 1); break;
@@ -828,7 +828,7 @@ void free_noteblocks (
 #define PARSE_RESULT_INTERNAL_ERROR        (4)
 
 unsigned char parse_bytes (
-    const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read
+    const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read.
     int*                 pIndex,      // Pointer to index in array of bytes. Calling this function usually increases it.
     struct noteblock**   ppNoteblock, // Pointer to pointer to current noteblock (or pointer to NULL if none). If this
         // function creates a new noteblock, *ppNoteblock will point to it afterwards. If a terminator is parsed,
@@ -837,14 +837,14 @@ unsigned char parse_bytes (
         // Bits 1-2 - number of beams (0-2) most recent note in this measure had, or 0 if no previous note in measure.
         // Bit 3 - whether most recent note (not necessarily in measure) had a tie on its right.
         // Bit 4 - whether previous noteblock was dynamics text.
-    // Returns one of the PARSE_RESULTs
+    // Returns one of the PARSE_RESULTs.
 ){
     if (ppNoteblock == NULL) { return PARSE_RESULT_INTERNAL_ERROR; } // *ppNoteblock can be NULL, but ppNoteblock can't
     unsigned char byte1, byte2, byte3, byte4; // Rarely all four used
     struct noteblock* pNewNoteblock = NULL;
 
     // enum local to this function, used only for maintaining *pInfo
-    enum type_enum { BARLINE, DYNAMICS, NOTEBLOCK, OTHER };
+    enum type_enum { BARLINE, DYNAMICS, NOTE, OTHER };
     enum type_enum type = OTHER; // By default, unless otherwise assigned
 
     byte1 = pBytes[*pIndex]; ++(*pIndex);
@@ -872,7 +872,7 @@ unsigned char parse_bytes (
                 if (
                     *ppNoteblock == NULL // Can't have dynamics text without a preceding noteblock
                     || *pInfo & 0b1000   // Can't have dynamics text twice consecutively
-                    ) {
+                ) {
                     return PARSE_RESULT_INVALID_BYTE;
                 }
                 byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
@@ -886,16 +886,16 @@ unsigned char parse_bytes (
         case 0b01: // Note, 2 bytes
             byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             pNewNoteblock = make_note (byte1, byte2, *pInfo);
-            type = NOTEBLOCK;
+            type = NOTE;
             break;
-        case 0b10: // Time change, 1 byte
+        case 0b10: // Time signature, 1 byte
             pNewNoteblock = make_time_signature (byte1);
             break;
-        case 0b11: // Key change, 4 bytes
+        case 0b11: // Key signature, 4 bytes
             byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             byte3 = pBytes[*pIndex]; ++(*pIndex); if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             byte4 = pBytes[*pIndex]; ++(*pIndex); if (byte4 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            pNewNoteblock = make_key_signature ((unsigned short)byte2 * 256 + byte1, (unsigned short)byte4 * 256 + byte3);
+            pNewNoteblock = make_key_signature ((unsigned short)byte2 << 8 + byte1, (unsigned short)byte4 << 8 + byte3);
             break;
     }
 
@@ -909,8 +909,8 @@ unsigned char parse_bytes (
         return PARSE_RESULT_INTERNAL_ERROR; // Probably ran out of memory
     }
 
-    *pInfo = ((type == BARLINE) ? 0 : (type == NOTEBLOCK) ? count_note_beams (byte2) : (*pInfo & 0b11)) // bits 1-2
-        + ((type == NOTEBLOCK) ? (notehead_tied_to_next (byte2) << 2) : (*pInfo & 0b100)) // bit 3
+    *pInfo = ((type == BARLINE) ? 0 : (type == NOTE) ? count_note_beams (byte2) : (*pInfo & 0b11)) // bits 1-2
+        + ((type == NOTE) ? (notehead_tied_to_next (byte2) << 2) : (*pInfo & 0b100)) // bit 3
         + ((type == DYNAMICS) << 3); // bit 4
     return PARSE_RESULT_PARSED_NOTEBLOCK;
 }
@@ -923,13 +923,13 @@ unsigned char parse_bytes_start_to_end (
     // Returns one of the PARSE_RESULTs
 ){
     int index = 0;
-    unsigned char context = 0;
+    unsigned char info = 0;
 
     *pp1stNoteblock = NULL; // Set this so parse_bytes knows it's at the first noteblock
-    unsigned char parseResult = parse_bytes (pBytes, &index, pp1stNoteblock, &context);
+    unsigned char parseResult = parse_bytes (pBytes, &index, pp1stNoteblock, &info);
     struct noteblock* pNoteblock = *pp1stNoteblock;
     while (parseResult == PARSE_RESULT_PARSED_NOTEBLOCK) {
-        parseResult = parse_bytes (pBytes, &index, &pNoteblock, &context);
+        parseResult = parse_bytes (pBytes, &index, &pNoteblock, &info);
     }
     *pErrIndex = (parseResult == PARSE_RESULT_PARSED_ALL) ? -1 : index - 1;
     return parseResult;
@@ -955,9 +955,7 @@ void append_staff_row_initial (
         char* pRow = &((pCurrentNoteblock->text)[row][0]);
         if (*pIdxInStr >= unsafeIdxInStr) {
             char width = pRow[0] != '\0' + pRow[1] != '\0' + pRow[2] != '\0' + pRow[3] != '\0' + pRow[4] != '\0';
-            if (*pIdxInStr + width >= limitIdxInStr) {
-                break;
-            }
+            if (*pIdxInStr + width >= limitIdxInStr) { break; }
         }
         if (pRow[0] != '\0') { str[*pIdxInStr] = pRow[0]; ++(*pIdxInStr); }
         if (pRow[1] != '\0') { str[*pIdxInStr] = pRow[1]; ++(*pIdxInStr); }
@@ -1046,13 +1044,17 @@ void try_read_file (
     int widthInt;
     if (isWidthEntered) {
         widthInt = atoi (widthStr); // Returns 0 if not parsable
-        if (widthInt < NOTEBLOCK_WIDTH) {
+        if (widthInt == 0) {
+            printf ("  Invalid width\n");
+            return;
+        }
+        else if (widthInt < NOTEBLOCK_WIDTH) {
             printf ("  Invalid width %s < %d\n", widthStr, NOTEBLOCK_WIDTH);
             return;
         }
     }
     else {
-        widthInt = INT_MAX; // Will be ignored
+        widthInt = INT_MAX; // Will effectively be ignored
     }
 
     // Open file
@@ -1206,6 +1208,9 @@ void main (
     }
     else if (argc == 2 && strcmp (argv[1], "-p") == 0) {
         printf ("  Count argument required for option -p\n");
+    }
+    else if (argc == 2 && strcmp (argv[1], "-h") == 0) {
+        printf (STR_HELP);
     }
     else if (argc == 2) {
         try_read_file (argv[1], 0, 0);
