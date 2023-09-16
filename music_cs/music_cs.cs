@@ -1040,7 +1040,7 @@ namespace MusicCS {
             }
             int fileSizeInt = (int)fileSizeLong;
             using FileStream fileStream = fileInfo.OpenRead ();
-			using BinaryReader binaryReader = new (fileStream);
+            using BinaryReader binaryReader = new (fileStream);
             byte[] bytes = binaryReader.ReadBytes (fileSizeInt);
 			
             
