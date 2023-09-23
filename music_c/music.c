@@ -23,7 +23,7 @@ const char* STR_HELP =
 // File encoding
 const char* STR_ENCODING =
 "  FILE CREATION\n"
-"  To create an encoded file, you can use the PowerShell set-content cmdlet - for example:\n"
+"  To create an encoded file, you can use the PowerShell set-content cmdlet. For example:\n"
 "    $b=[byte[]]@(0x53,0x61,0x75,0x63,0x65)\n"
 "    set-content encoded_song $b -encoding byte\n"
 "  FILE ENCODING\n"
@@ -493,20 +493,20 @@ void draw_rest (
         case 0b0000: case 0b0001: // 0 permanently invalid, 1 currently unused
             draw_row_error (pText, ROW_MD_B);
             break;
-        case 0b0010: // double whole rest
+        case 0b0010: // Double whole rest
             draw_row (pText, ROW_HI_D, 1, '#', '#', '#', 1);
             draw_row (pText, ROW_HI_C, 1, '#', '#', '#', d);
             draw_row (pText, ROW_MD_B, 1, '#', '#', '#', 1);
             break;
-        case 0b0011: // whole rest
+        case 0b0011: // Whole rest
             draw_row (pText, ROW_HI_D, 1, '#', '#', '#', 1);
             draw_row (pText, ROW_HI_C, 1, '#', '#', '#', d);
             break;
-        case 0b0100: // half rest
+        case 0b0100: // Half rest
             draw_row (pText, ROW_HI_C, 1, '#', '#', '#', d);
             draw_row (pText, ROW_MD_B, 1, '#', '#', '#', 1);
             break;
-        case 0b0101: // quarter rest
+        case 0b0101: // Quarter rest
             draw_row (pText, ROW_HI_D, 1, 1, '\\', 1, 1);
             draw_row (pText, ROW_HI_C, 1, 1, '/', d, 1);
             draw_row (pText, ROW_MD_B, 1, 1, '\\', 1, 1);
@@ -762,7 +762,7 @@ struct noteblock* make_barline (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    char width = ((byte >> 4) > 6) ? 5 : BARLINE_NOTEBLOCK_WIDTHS[byte >> 4];
+    char width = ((byte >> 4) >= 6) ? 5 : BARLINE_NOTEBLOCK_WIDTHS[byte >> 4];
     draw_staff (pText, width, 0);
     for (char row = ROW_LO_E; row <= ROW_HI_F; ++row) {
         draw_barline_row (pText, row, byte);
@@ -895,7 +895,9 @@ unsigned char parse_bytes (
             byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             byte3 = pBytes[*pIndex]; ++(*pIndex); if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             byte4 = pBytes[*pIndex]; ++(*pIndex); if (byte4 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            pNewNoteblock = make_key_signature ((unsigned short)byte2 << 8 + byte1, (unsigned short)byte4 << 8 + byte3);
+            unsigned short bits01to16 = ((unsigned short)byte2 << 8) + byte1;
+            unsigned short bits17to32 = ((unsigned short)byte4 << 8) + byte3;
+            pNewNoteblock = make_key_signature (bits01to16, bits17to32);
             break;
     }
 
@@ -995,14 +997,14 @@ void append_staff_row_subsequent (
 
 char* noteblocks_to_string (
     struct noteblock* p1stNoteblock, // Initial noteblock.
-    int               maxPageWidth   // Max width of a page in characters. Should equal or exceed NOTEBLOCK_WIDTH.
+    int               maxStaffWidth   // Max width of a staff in characters. Should equal or exceed NOTEBLOCK_WIDTH.
     // Returns conversion of these noteblocks to a single string.
 ){
-    if (p1stNoteblock == NULL || maxPageWidth < NOTEBLOCK_WIDTH) { return NULL; }
+    if (p1stNoteblock == NULL || maxStaffWidth < NOTEBLOCK_WIDTH) { return NULL; }
 
     // Allocate a string with max length we might need if every noteblock fills all 5 columns (no '\0' column)
     unsigned int countNoteblocks = count_noteblocks (p1stNoteblock);
-    unsigned int noteblocksPerStaff = maxPageWidth / NOTEBLOCK_WIDTH; // Assuming all 5 columns used always
+    unsigned int noteblocksPerStaff = maxStaffWidth / NOTEBLOCK_WIDTH; // Assuming all 5 columns used always
     unsigned int countStaves = (countNoteblocks / noteblocksPerStaff) + (countNoteblocks % noteblocksPerStaff > 0);
     unsigned int countChars = (NOTEBLOCK_HEIGHT * NOTEBLOCK_WIDTH * countNoteblocks) // Actual noteblock text
         + ((NOTEBLOCK_HEIGHT + 1) * countStaves) + 1; // '\n's at ends of rows and single '\0' at end of string
@@ -1016,7 +1018,7 @@ char* noteblocks_to_string (
         // Loop over rows in staff. Rows are numbered from bottom, but we're printing from top, so loop backwards.
         char row = NOTEBLOCK_HEIGHT - 1;
         struct noteblock* pStaffHeadNext; // Will be set by following function
-        append_staff_row_initial (pStaffHead, &pStaffHeadNext, row, str, &idxInStr, maxPageWidth);
+        append_staff_row_initial (pStaffHead, &pStaffHeadNext, row, str, &idxInStr, maxStaffWidth);
         for (--row; row >= 0; --row) {
             append_staff_row_subsequent (pStaffHead, pStaffHeadNext, row, str, &idxInStr);
         }
@@ -1031,16 +1033,17 @@ char* noteblocks_to_string (
 
 // Main/IO
 
+// Size in bytes of largest file we would try to read from.
 #define FILE_SIZE_MAX (99999)
 
 void try_read_file (
     char* filepath,       // User-entered file path and name.
-    char  isWidthEntered, // Whether user specified a page width.
-    char* widthStr        // User-entered string for maximum page width (min 5).
+    char  isWidthEntered, // Whether user specified a maximum staff width.
+    char* widthStr        // User-entered string for maximum staff width (min 5).
                           // Ignored if isWidthEntered is false.
     // Attempts to open file, decode it, and print music.
 ){
-    // Find page width, parsing widthStr if specified
+    // Find staff width, parsing widthStr if specified
     int widthInt;
     if (isWidthEntered) {
         widthInt = atoi (widthStr); // Returns 0 if not parsable
@@ -1073,12 +1076,12 @@ void try_read_file (
     
     // Check file size
     if (fileSize == 0) {
-        printf ("File is empty: %s\n", filepath);
+        printf ("  File is empty: %s\n", filepath);
         fclose (file);
         return;
     }
     if (fileSize > FILE_SIZE_MAX) {
-        printf ("File is too long (>%d bytes): %s\n", FILE_SIZE_MAX, filepath);
+        printf ("  File is too long (>%d bytes): %s\n", FILE_SIZE_MAX, filepath);
         fclose (file);
         return;
     }
@@ -1162,7 +1165,7 @@ void test_performance (
     // The following is over-optimized for the speed of the loop.
     // In particular, the loop does direct comparison to 0 with no modulus involved.
     int tenthOfCount = countInt / 10;
-    int tenthsDone = 0; // How many times we have looped count/10 times 
+    int tenthsDone = 0; // How many times we have looped count/10 times
     int i = tenthOfCount + (countInt % 10); // i will count down to 0 ten times
     printf ("  Done: 00%%");
     time_t time0, time1;

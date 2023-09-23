@@ -32,7 +32,7 @@ namespace MusicCS {
         // File encoding
         const string STR_ENCODING =
         "  FILE CREATION\n" +
-        "  To create an encoded file, you can use the PowerShell set-content cmdlet - for example:\n" +
+        "  To create an encoded file, you can use the PowerShell set-content cmdlet. For example:\n" +
         "    $b=[byte[]]@(0x53,0x61,0x75,0x63,0x65)\n" +
         "    set-content encoded_song $b -encoding byte\n" +
         "  FILE ENCODING\n" +
@@ -45,7 +45,7 @@ namespace MusicCS {
         "  Note (2 bytes):\n" +
         "    Bits 1-2:   Always 01\n" +
         "    Bits 3-6:   Rest (0) or pitches B to B to B (1 to 15)\n" +
-        "    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp (#) (3)\n" +
+        "    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp ('#') (3)\n" +
         "    Bits 9-12:\n" +
         "      Appearance - Invalid (0), unused (1), Breve (2), whole (3), half (4), quarter (5), eighth (6-14 even),\n" +
         "      sixteenth (7-15 odd). For eighths and sixteenths, there are five encodings each that indicate whether\n" +
@@ -101,7 +101,7 @@ namespace MusicCS {
             0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
             0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
             0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-            0b00010001, 0b0000101, // Low E, quarter
+            0b00010001, 0b00000101, // Low E, quarter
             0b00000100, // Single barline
             0b00000001, 0b00000110, // Eighth rest
             0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
@@ -184,7 +184,7 @@ namespace MusicCS {
         
         public void DrawRow (
             Row row, // Row (0-15)
-            // Below: Characters to copy to the 5-character long row. Pass null to use existing value.
+            // Below: Characters to copy to the 5-character long row. Pass null to use existing char.
             char? c0, char? c1, char? c2, char? c3, char? c4
         ){
             if (c0 != null) this.text[(int)row, 0] = (char)c0;
@@ -298,7 +298,7 @@ namespace MusicCS {
         }
 
         static sbyte noteOrientation (
-            byte byte1 // Bits  1-8 of note encoding.
+            byte byte1 // Bits  1-8 of note encoding. Bits 3-6 are relevant here.
             // Returns 1 or -1. If 1, the stem (if it exists) is on top and the articulation (if it exists) is on the bottom.
         ){
             return (noteheadRow (byte1) <= Row.MdB) ? (sbyte)1 : (sbyte)(-1);
@@ -324,7 +324,7 @@ namespace MusicCS {
 
         static char? preNoteheadCharacter (
             byte byte1,   // Bits 1-8 of note encoding. Bits 3-8 are relevant here.
-            bool prevTied // Whether the previous note is tied to this one
+            bool prevTied // Whether the previous note is tied to this one.
             // Returns the character to use left of the notehead, or ASCII character 1 if existing
             // character should be used.
         ){
@@ -336,6 +336,8 @@ namespace MusicCS {
 
         static char? articulationNoteheadCharacter (
             byte byte2  // Bits 9-16 of note encoding. Bits 15-16 are relevant here.
+            // Returns the character to use above/below the notehead, or ASCII character 1 if existing
+            // character should be used.
         ){
             return ARTICULATION_CHARS[byte2 >> 6]; // Index is bits 15-16
         }
@@ -579,16 +581,14 @@ namespace MusicCS {
         }
         
         static void drawStemFlagsBeams (
-            Noteblock noteblock,     // Noteblock in which to draw.
+            Noteblock noteblock,     // Noteblock in which to draw the stem.
             byte      byte1,         // Bits 1-8 of note encoding.
             byte      byte2,         // Bits 9-16 of note encoding.
             byte      countLeftBeams // How many beams (0-2) this note should have on the left, if beamed.
             // Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
         ){
             byte stemHeight = Music.stemHeight (byte1, byte2);
-            if (stemHeight == 0) {
-                return;
-            }
+            if (stemHeight == 0) { return; }
             Row noteheadRow = Music.noteheadRow (byte1);
             sbyte orientation = noteOrientation (byte1);
             Row stemTopRow = noteheadRow + (orientation * stemHeight); // "top" meaning farthest from notehead
@@ -674,7 +674,7 @@ namespace MusicCS {
             Row noteheadRow = Music.noteheadRow (byte1);
             byte ledgerLineFlags = // 1st bit for low ledger line, 2nd bit for high ledger line
                 (byte)(((noteheadRow <= Row.LoC && noteheadRow != Row.Text) ? 1 : 0) + ((Row.HiA <= noteheadRow) ? 2 : 0));
-            drawStaff (noteblock, 5, ledgerLineFlags);
+            drawStaff (noteblock, Noteblock.WIDTH, ledgerLineFlags);
             
             if (isRest (byte1)) {
                 drawRest (noteblock, byte2);
@@ -719,7 +719,7 @@ namespace MusicCS {
             ushort bits17to32  // Bits 17-32 of key signature encoding. Bits 20-30 are relevant here.
         ){
             Noteblock noteblock = new ();
-            drawStaff (noteblock, 5, 0);
+            drawStaff (noteblock, Noteblock.WIDTH, 0);
             
             int LAST_IDX = KEY_SIGNATURE_ROWS.Length - 1;
             int dir = ((bits01to16 & 0b100) > 0) ? -1 : 1; // Loop backwards or forwards through KEY_SIGNATURE_ROWS
@@ -753,7 +753,7 @@ namespace MusicCS {
             byte byte1 // Bits 1-8 of barline encoding. Bits 5-7 are relevant here.
         ){
             Noteblock noteblock = new ();
-            byte width = (byte)(((byte1 >> 4) > 6) ? 5 : BARLINE_NOTEBLOCK_WIDTHS[byte1 >> 4]);
+            byte width = (byte)(((byte1 >> 4) >= 6) ? 5 : BARLINE_NOTEBLOCK_WIDTHS[byte1 >> 4]);
             drawStaff (noteblock, width, 0);
             for (Row row = Row.LoE; row <= Row.HiF; ++row) {
                 drawBarlineRow (noteblock, row, byte1);
@@ -802,7 +802,7 @@ namespace MusicCS {
         enum ParseResult { ParsedNoteblock, ParsedAll, UnexpectedTerminator, UnexpectedEnd, InvalidByte, InternalError }
 
         static ParseResult parseBytes (
-            byte[]         bytes,     // Array of bytes (0-terminated) from which to read
+            byte[]         bytes,     // Array of bytes (0-terminated) from which to read.
             ref int        index,     // Reference to index in array of bytes. Calling this method usually increases it.
             ref Noteblock? noteblock, // Reference to current noteblock (or null if none). If this method creates a new
                 // noteblock, noteblock will be set to it afterwards. If a terminator is parsed, noteblock will be set
@@ -811,13 +811,13 @@ namespace MusicCS {
                 // Bits 1-2 - number of beams (0-2) most recent note in this measure had, or 0 if no previous note in measure.
                 // Bit 3 - whether most recent note (not necessarily in measure) had a tie on its right.
                 // Bit 4 - whether previous noteblock was dynamics text.
-            // Returns one of the ParseResults
+            // Returns one of the ParseResults.
         ){
             byte byte1, byte2 = 0, byte3, byte4; // Rarely all four used
             Noteblock? newNoteblock = null;
             
             // Enum-like constants local to this function, used only for maintaining *pInfo
-            const byte BARLINE = 0, DYNAMICS = 1, NOTEBLOCK = 2, OTHER = 3;
+            const byte BARLINE = 0, DYNAMICS = 1, NOTE = 2, OTHER = 3;
             byte type = OTHER; // By default, unless otherwise assigned
             
             if (index >= bytes.Length) { return ParseResult.UnexpectedEnd; }
@@ -863,17 +863,19 @@ namespace MusicCS {
                     if (index >= bytes.Length) { return ParseResult.UnexpectedEnd; }
                     byte2 = bytes[index]; ++index; if (byte2 == 0) { return ParseResult.UnexpectedTerminator; }
                     newNoteblock = makeNote (byte1, byte2, info);
-                    type = NOTEBLOCK;
+                    type = NOTE;
                     break;
-                case 0b10: // Time change, 1 byte
+                case 0b10: // Time signature, 1 byte
                     newNoteblock = makeTimeSignature (byte1);
                     break;
-                case 0b11: // Key change, 4 bytes
+                case 0b11: // Key signature, 4 bytes
                     if (index + 2 >= bytes.Length) { return ParseResult.UnexpectedEnd; }
                     byte2 = bytes[index]; ++index; if (byte2 == 0) { return ParseResult.UnexpectedTerminator; }
                     byte3 = bytes[index]; ++index; if (byte3 == 0) { return ParseResult.UnexpectedTerminator; }
                     byte4 = bytes[index]; ++index; if (byte4 == 0) { return ParseResult.UnexpectedTerminator; }
-                    newNoteblock = makeKeySignature ((ushort)(byte2 * 256 + byte1), (ushort)(byte4 * 256 + byte3));
+                    ushort bits01to16 = (ushort)((byte2 << 8) + byte1);
+                    ushort bits17to32 = (ushort)((byte4 << 8) + byte3);
+                    newNoteblock = makeKeySignature (bits01to16, bits17to32);
                     break;
             }
             
@@ -882,8 +884,8 @@ namespace MusicCS {
                 noteblock = newNoteblock;
             }
             info = (byte)(
-                  ((type == BARLINE) ? 0 : (type == NOTEBLOCK) ? countNoteBeams (byte2) : (info & 0b11)) // bits 1-2
-                + ((type == NOTEBLOCK) ? (noteheadTiedToNext (byte2) ? 0b100 : 0) : (info & 0b100)) // bit 3
+                  ((type == BARLINE) ? 0 : (type == NOTE) ? countNoteBeams (byte2) : (info & 0b11)) // bits 1-2
+                + ((type == NOTE) ? (noteheadTiedToNext (byte2) ? 0b100 : 0) : (info & 0b100)) // bit 3
                 + ((type == DYNAMICS) ? 0b1000 : 0)); // bit 4 
             return ParseResult.ParsedNoteblock;
         }
@@ -893,16 +895,16 @@ namespace MusicCS {
             byte[]         bytes,          // Array of bytes (0b11111111-terminated) from which to read.
             out Noteblock? firstNoteblock, // Will be set to first noteblock in list.
             out int        errIndex        // If an error occurs, will be set to its index in bytes array, otherwise to -1.
-            // Returns one of the PARSE_RESULTs
+            // Returns one of the ParseResults
         ){
             int index = 0;
-            byte context = 0;
+            byte info = 0;
             firstNoteblock = null;
             
-            ParseResult parseResult = parseBytes (bytes, ref index, ref firstNoteblock, ref context);
+            ParseResult parseResult = parseBytes (bytes, ref index, ref firstNoteblock, ref info);
             Noteblock? noteblock = firstNoteblock;
             while (parseResult == ParseResult.ParsedNoteblock) {
-                parseResult = parseBytes (bytes, ref index, ref noteblock, ref context);
+                parseResult = parseBytes (bytes, ref index, ref noteblock, ref info);
             }
             errIndex = (parseResult == ParseResult.ParsedAll) ? -1 : index - 1;
             return parseResult;
@@ -930,9 +932,7 @@ namespace MusicCS {
                 char c4 = currentNoteblock.GetChar (row, 4);
                 if (str.Length >= unsafeStrLength) {
                     int width = (c0 != '\0' ? 1 : 0) + (c1 != '\0' ? 1 : 0) + (c2 != '\0' ? 1 : 0) + (c3 != '\0' ? 1 : 0) + (c4 != '\0' ? 1 : 0);
-                    if (str.Length + width >= limitStrLength) {
-                        break;
-                    }
+                    if (str.Length + width + 1>= limitStrLength) { break; }
                 }
                 if (c0 != '\0') { str.Append (c0); }
                 if (c1 != '\0') { str.Append (c1); }
@@ -972,11 +972,11 @@ namespace MusicCS {
         
         static string? noteblocksToString (
             Noteblock firstNoteblock, // Initial noteblock.
-            int       maxPageWidth    // Max width of a page in characters. Should equal or exceed Noteblock.WIDTH.
+            int       maxStaffWidth   // Max width of a staff in characters. Should equal or exceed Noteblock.WIDTH.
         ){
             // Allocate a string with max length we might need if every noteblock fills all 5 columns (no '\0' column)
             int countNoteblocks = Music.countNoteblocks (firstNoteblock);
-            int noteblocksPerStaff = maxPageWidth / Noteblock.WIDTH;
+            int noteblocksPerStaff = maxStaffWidth / Noteblock.WIDTH;
             int countStaves = (countNoteblocks / noteblocksPerStaff) + (countNoteblocks % noteblocksPerStaff > 0 ? 1 : 0);
             int countChars = (Noteblock.HEIGHT * Noteblock.WIDTH * countNoteblocks) // Actual noteblock text
                 + ((Noteblock.HEIGHT + 1) * countStaves) + 1; // '\n's at ends of rows and single '\0' at end of string
@@ -987,7 +987,7 @@ namespace MusicCS {
             while (staffHead != null) {
                 // Loop over rows in staff. Rows are numbered from bottom, but we're printing from top, so loop backwards.
                 Row row = Row.Max;
-                appendStaffRowInitial (staffHead, out Noteblock? staffHeadNext, row, str, maxPageWidth);
+                appendStaffRowInitial (staffHead, out Noteblock? staffHeadNext, row, str, maxStaffWidth);
                 for (--row; row >= Row.Min; --row) {
                     appendStaffRowSubsequent (staffHead, staffHeadNext, row, str);
                 }
@@ -1003,14 +1003,15 @@ namespace MusicCS {
 
         #region Main/IO
 
+        // Size in bytes of largest file we would try to read from.
         const int FILE_MAX_LENGTH = 99999;
         
         static void tryReadFile (
-            string  filepath,       // User-entered file path and name.
-            string? widthStr        // User-entered string for maximum page width (5-255 allowed).
+            string  filepath, // User-entered file path and name.
+            string? widthStr  // User-entered string for maximum staff width (5-255 allowed).
             // Attempts to open file, decode it, and print music.
         ){
-            // Find page width, parsing widthStr if specified
+            // Find staff width, parsing widthStr if specified
             int widthInt;
             if (widthStr != null) {
                 _ = int.TryParse (widthStr, out widthInt); // widthInt set to 0 if not parsable
@@ -1020,22 +1021,22 @@ namespace MusicCS {
                 }
             }
             else {
-                widthInt = int.MaxValue; // Will be ignored
+                widthInt = int.MaxValue; // Will effectively be ignored
             }
 
             // Open, check, read, and close file
             FileInfo fileInfo = new (filepath);
             if (!fileInfo.Exists) {
-                Console.Write ($"Unable to open file: {filepath}\n", filepath);
+                Console.Write ($"  Unable to open file: {filepath}\n", filepath);
                 return;
             }
             long fileSizeLong = fileInfo.Length;
             if (fileSizeLong == 0) {
-                Console.Write ($"File is empty: {filepath}\n", filepath);
+                Console.Write ($"  File is empty: {filepath}\n", filepath);
                 return;
             }
             if (fileSizeLong > FILE_MAX_LENGTH) {
-                Console.Write ($"File is too long (>{FILE_MAX_LENGTH} bytes): {filepath}\n", filepath);
+                Console.Write ($"  File is too long (>{FILE_MAX_LENGTH} bytes): {filepath}\n", filepath);
                 return;
             }
             int fileSizeInt = (int)fileSizeLong;
@@ -1081,7 +1082,7 @@ namespace MusicCS {
             ParseResult parseResult = parseBytesStartToEnd (EXAMPLE_BYTES, out Noteblock? firstNoteblock, out int errIndex);
             if (parseResult != ParseResult.ParsedAll || firstNoteblock == null) {
                 Console.Write (
-                    $"Internal error: parse result {parseResult}, error index {errIndex}, {(firstNoteblock == null ? "no" : "a")} noteblock exists\n");
+                    $"  Internal error: parse result {parseResult}, error index {errIndex}, {(firstNoteblock == null ? "no" : "a")} noteblock exists\n");
                 return null;
             }
             return noteblocksToString (firstNoteblock, 85);
@@ -1145,6 +1146,9 @@ namespace MusicCS {
             else if (args.Length == 1 && args[0] == "-p") {
                 Console.Write ("  Count argument required for option -p\n");
             }
+            else if (args.Length == 1 && args[0] == "-h") {
+                Console.Write (STR_HELP);
+			}
             else if (args.Length == 1) {
                 tryReadFile (args[0], null);
             }
