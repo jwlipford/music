@@ -16,6 +16,7 @@ I was inspired by three desires:
 
 * I wrote an F# version. It was quite fun. However, that version is not at all optimized and runs about a hundred times slower than the C# version. On my machine, `music_fs.exe -p 5432` runs in 33 seconds.
 * I got most of the way through a Fortran version before I lost interest. That version's performance compares to the C version's. However, given the choice, I would much rather code in C; I see the reason for C's higher popularity.
+* I wrote a MUMPS version. It was fun. Because MUMPS is such a different language from the others, there are interesting differences in the data structures. What in C and C# was a linked list of two-dimensional arrays is in MUMPS a three-level tree of strings.
 
 #### Example of visual style
 
