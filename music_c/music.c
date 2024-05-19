@@ -35,22 +35,24 @@ const char* STR_ENCODING =
 "    set-content encoded_song $b -encoding byte\n"
 "  FILE ENCODING\n"
 "  The file consists of groups of bytes that represent \"noteblocks\", which are rectangles of text 16\n"
-"  characters high and at most 5 characters wide. At most 3 bytes represent one noteblock.\n"
-"  In the following descriptions, we count bits from the right, the 1's place.\n"
+"  characters high and at most 5 characters wide. At most 4 bytes represent one noteblock.\n"
+"  In the following descriptions, we count bits from the right, the 1's place, starting at 1.\n"
 "  For example, in the bit string 10010, bits 2 and 5 are the 1s; bits 1, 3, and 4 are the 0s.\n"
+"  For two bytes, their bits numbered in base 32 are: 87654321 GFEDCBA9.\n"
 "  Terminator (1 byte):\n"
 "    Bits 1-8: Always 00000000\n"
 "  Note (2 bytes):\n"
 "    Bits 1-2:   Always 01\n"
-"    Bits 3-6:   Rest (0) or pitches B to B to B (1 to 15)\n"
+"    Bits 3-6:   Rest (0) or pitches low B (1) to middle B (8) to high B (15)\n"
 "    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp ('#') (3)\n"
 "    Bits 9-12:\n"
 "      Appearance - Invalid (0), unused (1), Breve (2), whole (3), half (4), quarter (5), eighth (6-14 even),\n"
 "      sixteenth (7-15 odd). For eighths and sixteenths, there are five encodings each that indicate whether\n"
 "      the note is flagged or beamed and, if beamed, the beam height:\n"
-"        Flagged (6-7) VS beamed (8-15)\n"
-"        Beamed on left only (12-15) VS on right, plus left if preceded by a right-side beam (8-11)\n"
-"        Beam two spaces away (8-9, 12-13) VS three spaces away (10-11, 14-15)\n"
+"        Flagged (6-7) VS beamed (8-15).\n"
+"        Beamed on left only with number of left-side beams determined by previous note (12-15), VS\n"
+"          beamed on right at least once with number of left-side beams determined by previous note (8-11).\n"
+"        Beam two spaces away (8-9, 12-13) VS three spaces away (10-11, 14-15).\n"
 "    Bit  13:    Dotted\n"
 "    Bit  14:    Tie/slur after\n"
 "    Bits 15-16: Articulations: None (0), staccato (1), accent (2), tenuto (3)\n"
@@ -679,10 +681,11 @@ void draw_stem_flags_beams (
     // Draw flags, if any
     char countFlags = count_note_flags (byte2);
     if (countFlags >= 1) {
-        char flagChar = (orientation > 0) ? '\\' : '/';
-        draw_row (pText, stemTopRow, 1, 1, 1, 1, flagChar);
+        char char3 = (orientation > 0) ? 1 : '/';
+        char char5 = (orientation > 0) ? '\\' : 1;
+        draw_row (pText, stemTopRow, 1, 1, char3, 1, char5);
         if (countFlags == 2) {
-            draw_row (pText, (stemTopRow - orientation), 1, 1, 1, 1, flagChar);
+            draw_row (pText, (stemTopRow - orientation), 1, 1, char3, 1, char5);
         }
     }
 
