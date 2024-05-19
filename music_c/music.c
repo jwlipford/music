@@ -1,6 +1,8 @@
+//*****************************************************************************************************
 // music.c
 // Takes a bit string as input, converts to music notation which is printed.
 // This is primarily an exercise in squeezing high information density out of a small number of bytes.
+//*****************************************************************************************************
 
 
 #include <limits.h> // UINT_MAX
@@ -10,6 +12,11 @@
 #include <string.h> // strcmp
 #include <time.h>   // time
 
+
+
+//***********************
+// Help text and example
+//***********************
 
 // Command line arguments
 const char* STR_HELP =
@@ -131,7 +138,10 @@ const char EXAMPLE_BYTES[] = {
 #define EXAMPLE_WIDTH (85)
 
 
-// ================================================================================================
+
+//*********************
+// Noteblock structure
+//*********************
 
 // Structure for text used by a note, time signature, key signature, barline, etc.
 // Also has pointer to next noteblock in linked list of noteblocks
@@ -168,64 +178,86 @@ struct noteblock {
 #define ROW_TEXT  (0)
 
 
-// Small inline functions for note encoding
 
+//*******************************************************
+// Small inline functions for interpreting encoded bytes
+//*******************************************************
+
+// Returns row (1-15) notehead should be on, or 0 if note is a rest
+// (in which case no part of the rest should affect the 0th row).
 inline unsigned char notehead_row (
     unsigned char byte1 // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
-    // Returns row (1-15) notehead should be on, or 0 if note is a rest
-    // (in which case no part of the rest should affect the 0th row).
 ){
     return (byte1 & 0b111100) >> 2;
 }
 
+
+// Whether a note-type noteblock is a rest
 inline char is_rest (
     unsigned char byte1 // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
 ){
     return notehead_row (byte1) == 0;
 }
 
+
+// Whether a note-type noteblock is a double whole note (AKA breve)
 inline char note_is_double_whole (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) == 2;
 }
 
+
+// Whether a note-type noteblock is a whole note
 inline char note_is_whole (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) == 3;
 }
 
+
+// Whether a note-type noteblock has a stem
 inline char note_has_stem (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) >= 4;
 }
 
+
+// Whether a note-type noteblock's notehead is filled
 inline char notehead_is_filled (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) >= 5;
 }
 
+
+// Whether a note-type noteblock has beams on the stem (on either or both sides)
 inline char note_has_beams (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) >= 8;
 }
 
+
+// Whether a note-type noteblock has beams on the right side of the stem
 inline char note_has_beams_right (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (byte2 & 0b1111) >= 8 && (byte2 & 0b1111) < 12;
 }
 
+
+// A note-type noteblock's number of flags on the stem
 inline char count_note_flags (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return ((byte2 & 0b1111) == 6) ? 1 : ((byte2 & 0b1111) == 7) ? 2 : 0;
 }
 
+
+// A note-type noteblock's number of beams on the stem (on either or both sides).
+// Beamed eighth notes have one, beamed sixteenth notes have two, and others have zero.
 inline char count_note_beams (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
     // Returns number of beams a note has. Beamed eighth notes have one; beamed sixteenth notes have two.
@@ -233,6 +265,8 @@ inline char count_note_beams (
     return note_has_beams (byte2) ? (1 + (byte2 & 0b1)) : 0;
 }
 
+
+// A note-type noteblock's number of beams on the right side of the stem.
 inline char count_note_beams_right (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
     // Returns number of right-side beams a note has.
@@ -240,12 +274,16 @@ inline char count_note_beams_right (
     return note_has_beams_right (byte2) ? (1 + (byte2 & 0b1)) : 0;
 }
 
+
+// Whether a note-type noteblock with a beam has an extra-long stem
 inline char note_has_long_stem (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
 ){
     return (0b1100110000000000 >> (byte2 & 0b1111)) & 0b1;
 }
 
+
+// Returns 1 or -1. If 1, the stem (if it exists) is on top and the articulation (if it exists) is on the bottom.
 inline char note_orientation (
     unsigned char byte1 // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
     // Returns 1 or -1. If 1, the stem (if it exists) is on top and the articulation (if it exists) is on the bottom.
@@ -253,12 +291,16 @@ inline char note_orientation (
     return (notehead_row (byte1) <= ROW_MD_B) ? 1 : -1;
 }
 
+
+// Whether a note-type noteblock's notehead is dotted
 inline char notehead_is_dotted (
     unsigned char byte2 // Bits 9-16 of note encoding. Bit 13 is relevant here.
 ){
     return (byte2 & 0b10000) > 0;
 }
 
+
+// Whether a note-type noteblock's notehead is tied to the next note
 inline char notehead_tied_to_next (
     unsigned char byte2 // Bits 9-16 of note encoding. Bit 14 is relevant here.
 ){
@@ -266,10 +308,14 @@ inline char notehead_tied_to_next (
 }
 
 
-// Larger inline functions for note encoding
+
+//********************************************************
+// Larger inline functions for interpreting encoded bytes
+//********************************************************
 
 const char ACCIDENTAL_CHARS[] = { 1, 'b', '~', '#' }; // Existing/none, flat, natural, sharp
 
+// Get the character to use to the left of the notehead
 inline char pre_notehead_character (
     unsigned char byte1,   // Bits 1-8 of note encoding. Bits 3-8 are relevant here.
     unsigned char prevTied // Whether the previous note is tied to this one.
@@ -282,6 +328,7 @@ inline char pre_notehead_character (
 
 const char ARTICULATION_CHARS[] = { 1, '.', '>', '=' }; // Existing/none, staccato, accent, tenuto
 
+// Get the character to use above/below the notehead
 inline char articulation_notehead_character (
     unsigned char byte2  // Bits 9-16 of note encoding. Bits 15-16 are relevant here.
     // Returns the character to use above/below the notehead, or ASCII character 1 if existing
@@ -291,6 +338,7 @@ inline char articulation_notehead_character (
 }
 
 
+// Get the character to use to the right of the notehead.
 inline char post_notehead_character (
     unsigned char byte2 // Bits 9-16 of note encoding. Bits 13-14 are relevant here.
     // Returns the character to use left of the notehead, or ASCII character 1 if existing
@@ -300,27 +348,35 @@ inline char post_notehead_character (
 }
 
 
+//************************
 // Other inline functions
+//************************
 
+// Whether the row is a space adjacent to the Middle B line
 inline char row_beside_mid_B (
     char row // Row number (0-15)
 ){
     return (row == ROW_LO_A) || (row == ROW_HI_C);
 }
 
+
+// Whether a row is a line at the top or bottom of the staff - the Low E line or High F line
 inline char row_is_edge (
     char row // Row number (0-15)
 ){
     return (row == ROW_LO_E) || (row == ROW_HI_F);
 }
 
+
+// Whether the row is a space (meaning odd numbered - rows that could have ledger lines don't count)
 inline char row_is_space (
     char row // Row number (0-15)
-    // Returns 1 if row is a space (odd numbered; rows that could have ledger lines don't count).
 ){
     return row % 2;
 }
 
+
+// Get a pointer to a noteblock's text array
 inline char* get_ptr_to_text (
     struct noteblock* pNoteblock // Pointer to a noteblock
     // Returns pointer to *pNoteblock's 2-dimensional array of text
@@ -329,8 +385,12 @@ inline char* get_ptr_to_text (
 }
 
 
-// Larger misc. function
 
+//***********************
+// Larger misc. function
+//***********************
+
+// Get the height of a note's stem
 char stem_height (
     unsigned char byte1, // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
     unsigned char byte2  // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
@@ -351,8 +411,12 @@ char stem_height (
 }
 
 
-// "Draw row" functions
 
+//***************************************************************
+// "Draw row" functions to draw within an existing noteblock row
+//***************************************************************
+
+// Overwrite some characters in a row of a noteblock
 void draw_row (
     char* pText, // (Pointer to) a noteblock's 2D array text
     char  row,   // Row number (0-15)
@@ -370,6 +434,7 @@ void draw_row (
 }
 
 
+// Overwrite all characters in a row of a noteblock.
 void draw_row_raw (
     char* pText, // (Pointer to) a noteblock's 2D array text
     char  row,   // Row number (0-15)
@@ -381,17 +446,21 @@ void draw_row_raw (
 }
 
 
+// Overwrite a row of a noteblock with the string "ERROR".
 inline void draw_row_error (
     char* pText, // (Pointer to) a noteblock's 2D array text
     char  row    // Row number (0-15)
-    // Draws "ERROR" in a row in a noteblock.
 ){
     draw_row_raw (pText, row, 'E', 'R', 'R', 'O', 'R');
 }
 
 
-// "Draw" functions
 
+//*****************************************************
+// "Draw" functions to draw within existing noteblocks
+//*****************************************************
+
+// Draw the staff (spaces and lines) in a noteblock.
 void draw_staff (
     char*         pText,          // (Pointer to) a noteblock's 2D array of text, in which to draw the staff.
     char          width,          // Width of noteblock. If less than 5, remaining column(s) will be filled with '\0's.
@@ -421,8 +490,11 @@ void draw_staff (
 }
 
 
+// The sixteen characters that can be represented by a four-bit dynamics text encoding.
+// Bits 0,14,15 are invalid/unused, so they are 'E' for error.
 const char DYNAMICS_CHARACTERS[16] = { 'E', '\0', ' ', '<', '>', '.', 'c', 'd', 'e', 'f', 'm', 'p', 'r', 's', 'E', 'E' };
 
+// Draw the dynamics text row (bottom row, 0) in a noteblock
 void draw_dynamics_text_row (
     struct noteblock* pNoteblock, // (Pointer to) the noteblock in which to draw.
     unsigned char     byte1,      // Bits 1-8 of dynamics text encoding. Bits 1-4 should be 1000.
@@ -445,10 +517,11 @@ void draw_dynamics_text_row (
 }
 
 
+// Draw one row of a barline in a noteblock
 void draw_barline_row (
     char*         pText, // (Pointer to) a noteblock's 2D array text
     char          row,   // Row number (0-15)
-    unsigned char byte   // Bits 1-8 of barline encoding. Bits 4-7 are relevant here.
+    unsigned char byte   // Bits 1-8 of barline encoding. Bits 5-7 are relevant here.
 ){
     switch (byte) {
         case 0b00000100: // Single barline
@@ -484,6 +557,7 @@ void draw_barline_row (
 }
 
 
+// Draw a rest in a noteblock
 void draw_rest (
     char*         pText, // (Pointer to) a noteblock's 2D array of text, in which to draw the rest
     unsigned char byte2  // Bits 9-16 of note encoding. Bits 9-12 are relevant here.
@@ -527,6 +601,7 @@ void draw_rest (
 }
 
 
+// Draw the articulation, if one exists, below or above the notehead
 void draw_articulation (
     char*         pText, // (Pointer to) a noteblock's 2D array text, in which to draw the articulation
     unsigned char byte1, // Bits 1-8 of note encoding
@@ -542,12 +617,12 @@ void draw_articulation (
 }
 
 
+// Draws a 3-character notehead, as well as the characters to the left and right, for 5 total.
 void draw_notehead (
     char*         pText,   // (Pointer to) a noteblock's 2D array text, in which to draw the notehead.
     unsigned char byte1,   // Bits 1-8 of note encoding.
     unsigned char byte2,   // Bits 9-16 of note encoding.
     unsigned char prevTied // Whether the previous note is tied to this one.
-    // Draws a 3-character notehead, as well as the characters to the left and right, for 5 total.
 ){
     char preNoteheadChar, leftChar, fillChar, rightChar, postNoteheadChar; // 5 characters to draw
     char noteheadRow = notehead_row (byte1); // Row to draw in
@@ -573,12 +648,12 @@ void draw_notehead (
 }
 
 
+// Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
 void draw_stem_flags_beams (
     char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw.
     unsigned char byte1,         // Bits 1-8 of note encoding.
     unsigned char byte2,         // Bits 9-16 of note encoding.
     char          countLeftBeams // How many beams (0-2) this note should have on the left, if beamed.
-    // Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
 ){
     char stemHeight = stem_height (byte1, byte2);
     if (stemHeight == 0) { return; }
@@ -658,13 +733,16 @@ void draw_stem_flags_beams (
 
 
 
-// "Make" functions
+//********************************************************
+// "Make" functions to make different types of noteblocks
+//********************************************************
 
+// Make a note-type noteblock
 struct noteblock* make_note (
     unsigned char byte1, // Bits 1-8 of note encoding. Bits 1-2 should be 00.
     unsigned char byte2, // Bits 9-16 of note encoding
     unsigned char info   // Info stored between calls to parse_bytes
-    // Returns pointer to new noteblock
+    // Returns pointer to new noteblock.
 ){
     struct noteblock* pNoteblock = malloc (sizeof (struct noteblock));
     if (pNoteblock == NULL) { return NULL; }
@@ -687,8 +765,10 @@ struct noteblock* make_note (
 }
 
 
+// Make a time signature noteblock
 struct noteblock* make_time_signature (
     unsigned char byte // Bits 1-8 of time signature encoding. Bits 3-8 are relevant here.
+    // Returns pointer to new noteblock.
 ){
     unsigned char topNum = (byte / 16) + 1; // In range 1-16
     unsigned char btmNum = 1 << ((byte / 4) % 4); // In {1,2,4,8}
@@ -717,9 +797,11 @@ struct noteblock* make_time_signature (
 const char KEY_SIGNATURE_ROWS[11] =
 { ROW_LO_F, ROW_MD_B, ROW_HI_E, ROW_LO_E, ROW_LO_A, ROW_HI_D, ROW_HI_G, ROW_LO_D, ROW_LO_G, ROW_HI_C, ROW_HI_F };
 
+// Make a key signature noteblock
 struct noteblock* make_key_signature (
     unsigned short bits01to16, // Bits 1-16 of key signature encoding. Bits 4-14 are relevant here.
     unsigned short bits17to32  // Bits 17-32 of key signature encoding. Bits 20-30 are relevant here.
+    // Returns pointer to new noteblock.
 ){
     struct noteblock* pNoteblock = malloc (sizeof (struct noteblock));
     if (pNoteblock == NULL) { return NULL; }
@@ -728,7 +810,7 @@ struct noteblock* make_key_signature (
     draw_staff (pText, NOTEBLOCK_WIDTH, 0);
 
     const char LAST_IDX = sizeof (KEY_SIGNATURE_ROWS) - 1;
-    char dir = (bits01to16 & 0b100) ? -1 : 1; // Loop backwards or forwards through KEY_SIGNATURE_ROWS
+    char dir = (bits01to16 & 0b100) ? -1 : 1; // Direction - loop backwards or forwards through KEY_SIGNATURE_ROWS
     char col = 0;
     for (char i = 0; i <= LAST_IDX; ++i) {
         char row = KEY_SIGNATURE_ROWS[(dir > 0) ? i : (LAST_IDX - i)];
@@ -753,10 +835,13 @@ struct noteblock* make_key_signature (
 }
 
 
+// Width of each type of barline (starting with single barline of width 3)
 const char BARLINE_NOTEBLOCK_WIDTHS[6] = { 3, 4, 5, 5, 4, 1 };
 
+// Make a barline noteblock
 struct noteblock* make_barline (
     unsigned char byte // Bits 1-8 of barline encoding. Bits 5-7 are relevant here.
+    // Returns pointer to new noteblock.
 ){
     struct noteblock* pNoteblock = malloc (sizeof (struct noteblock));
     if (pNoteblock == NULL) { return NULL; }
@@ -771,13 +856,16 @@ struct noteblock* make_barline (
 }
 
 
+// CLEF_TEXT constants - the full 80-char (16*5) text of each clef noteblock
 const char     CLEF_TEXT_TREBLE[80] = "        _   / \\--|-/  |/ --|-- /|  /-|_-|/| \\|\\|-|\\_|_/--|--O_/                 ";
 const char       CLEF_TEXT_BASS[80] = "               -__--/  \\0O--|-   /0--/-- /   /----     -----                    ";
 const char CLEF_TEXT_PERCUSSION[80] = "               -----     ----- # # -#-#- # # -----     -----                    ";
 const char      CLEF_TEXT_ERROR[80] = "ERRORE  O  R  R  R  E  O  R  R  R  E  O  R  R  R  E  O  R  R  R  E  O  R  RERROR";
 
+// Make a clef noteblock
 struct noteblock* make_clef (
     unsigned char byte // Bits 1-8 of clef encoding. Bits 7-8 are relevant here.
+    // Returns pointer to new noteblock.
 ){
     struct noteblock* pNoteblock = malloc (sizeof (struct noteblock));
     if (pNoteblock == NULL) { return NULL; }
@@ -796,8 +884,12 @@ struct noteblock* make_clef (
 }
 
 
-// High-level functions dealing with multiple noteblocks
 
+//*******************************************************
+// High-level functions dealing with multiple noteblocks
+//*******************************************************
+
+// Count noteblocks including and following a given noteblock
 unsigned int count_noteblocks (
     struct noteblock* pNoteblock // Pointer to a noteblock. It and following will be counted.
 ){
@@ -810,6 +902,7 @@ unsigned int count_noteblocks (
 }
 
 
+// Deallocate memory for a noteblock and following noteblocks
 void free_noteblocks (
     struct noteblock* pNoteblock // Pointer to noteblock. It and following will be freed.
 ){
@@ -827,6 +920,7 @@ void free_noteblocks (
 #define PARSE_RESULT_INVALID_BYTE          (3)
 #define PARSE_RESULT_INTERNAL_ERROR        (4)
 
+// Parse one or more encoded bytes, creating a new noteblock
 unsigned char parse_bytes (
     const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read.
     int*                 pIndex,      // Pointer to index in array of bytes. Calling this function usually increases it.
@@ -869,6 +963,7 @@ unsigned char parse_bytes (
                 type = BARLINE;
                 break;
             case 0b1000: // Dynamics text, 3 bytes
+                // This is the only set of bytes that modifies the current noteblock rather than creating a new one.
                 if (
                     *ppNoteblock == NULL // Can't have dynamics text without a preceding noteblock
                     || *pInfo & 0b1000   // Can't have dynamics text twice consecutively
@@ -918,6 +1013,7 @@ unsigned char parse_bytes (
 }
 
 
+// Parse array of encoded bytes to create list of noteblocks
 unsigned char parse_bytes_start_to_end (
     const unsigned char* pBytes,         // Pointer to array of bytes (0b11111111-terminated) from which to read.
     struct noteblock**   pp1stNoteblock, // Will be set to pointer to pointer to first noteblock in list.
@@ -938,13 +1034,29 @@ unsigned char parse_bytes_start_to_end (
 }
 
 
-// String conversion functions
 
+//*****************************************************************************
+// Functions for converting a list of noteblocks to a string
+//
+// The string contains one or more staves. Each staff contains 16 newline-terminated rows.
+// We handle a user-specified max staff/row width to ensure the string displays properly in the terminal.
+// If the width is large enough, there may be only one staff.
+//*****************************************************************************
+
+
+// Create the top row of the current staff.
+// For performance, this function is separate from append_staff_row_subsequent, which handles
+// the other 15 rows of the staff. This function determines how many noteblocks fit in the
+// staff based on the max width. It sets *ppStaffHeadNext accordingly,
+// and append_staff_row_subsequent uses that information.
+// Originally, append_staff_row_initial and append_staff_row_subsequent were not separated into
+// two different functions. I noticed that they used a large portion of runtime, so I separated
+// them to improve performance. They are similar in structure and function.
 void append_staff_row_initial (
     struct noteblock*  pStaffHead,      // Pointer to first noteblock in current staff.
     struct noteblock** ppStaffHeadNext, // *ppStaffHeadNext will be set to pointer to first noteblock in next staff,
                                         // or NULL if currently in last staff.
-    char               row,             // Row number (0 to 15) in staff.
+    char               row,             // Row number (0 to 15) in staff. Should be the top row, ROW_HI_B.
     char*              str,             // Partially populated character array, in which to append.
     unsigned int*      pIdxInStr,       // Pointer to next index in str. Increased when function called.
     unsigned char      maxStaffWidth    // Max number of characters in the staff's string representation (not including
@@ -971,6 +1083,9 @@ void append_staff_row_initial (
 }
 
 
+// Create another row of the current staff.
+// Assumes that append_staff_row_initial has already determined which noteblocks are in range
+// for the current staff and that pStaffHead and pStaffHeadNext are set accordingly.
 void append_staff_row_subsequent (
     struct noteblock* pStaffHead,     // Pointer to first noteblock in current staff.
     struct noteblock* pStaffHeadNext, // Pointer to first noteblock in next staff, or NULL if currently in last staff.
@@ -979,8 +1094,6 @@ void append_staff_row_subsequent (
     char*             str,            // Partially populated character array, in which to append.
     unsigned int*     pIdxInStr       // Pointer to next index in str. Increased when function called.
 ){
-    // This function is very similar to append_staff_row_initial.
-    // Because these two functions use a large percentage of the program's time, I decided to separate them to optimize performance.
     struct noteblock* pCurrentNoteblock = pStaffHead;
     while (pCurrentNoteblock != pStaffHeadNext  && pCurrentNoteblock != NULL) {
         char* pRow = &((pCurrentNoteblock->text)[row][0]);
@@ -995,10 +1108,11 @@ void append_staff_row_subsequent (
 }
 
 
+// Convert noteblocks to a single string.
 char* noteblocks_to_string (
     struct noteblock* p1stNoteblock, // Initial noteblock.
-    int               maxStaffWidth   // Max width of a staff in characters. Should equal or exceed NOTEBLOCK_WIDTH.
-    // Returns conversion of these noteblocks to a single string.
+    int               maxStaffWidth  // Max width of a staff in characters. Should be no less than NOTEBLOCK_WIDTH.
+    // Returns the result of converting these noteblocks to a single string.
 ){
     if (p1stNoteblock == NULL || maxStaffWidth < NOTEBLOCK_WIDTH) { return NULL; }
 
@@ -1007,7 +1121,8 @@ char* noteblocks_to_string (
     unsigned int noteblocksPerStaff = maxStaffWidth / NOTEBLOCK_WIDTH; // Assuming all 5 columns used always
     unsigned int countStaves = (countNoteblocks / noteblocksPerStaff) + (countNoteblocks % noteblocksPerStaff > 0);
     unsigned int countChars = (NOTEBLOCK_HEIGHT * NOTEBLOCK_WIDTH * countNoteblocks) // Actual noteblock text
-        + ((NOTEBLOCK_HEIGHT + 1) * countStaves) + 1; // '\n's at ends of rows and single '\0' at end of string
+        + ((NOTEBLOCK_HEIGHT + 1) * countStaves) // '\n' at end of each row, including extra seperator row between staves
+        + 1; // '\0' at end of string
     char* str = malloc (countChars);
     if (str == NULL) { return NULL; }
 
@@ -1031,17 +1146,20 @@ char* noteblocks_to_string (
 }
 
 
+
+//*********
 // Main/IO
+//*********
 
 // Size in bytes of largest file we would try to read from.
 #define FILE_SIZE_MAX (99999)
 
+// Attempts to open file, decode it, and print music.
 void try_read_file (
     char* filepath,       // User-entered file path and name.
     char  isWidthEntered, // Whether user specified a maximum staff width.
-    char* widthStr        // User-entered string for maximum staff width (min 5).
+    char* widthStr        // User-entered string for maximum staff width (invalid if less than 5).
                           // Ignored if isWidthEntered is false.
-    // Attempts to open file, decode it, and print music.
 ){
     // Find staff width, parsing widthStr if specified
     int widthInt;
@@ -1074,7 +1192,7 @@ void try_read_file (
     int fileSize = ftell (file);
     rewind (file);
     
-    // Check file size
+    // Validate file size
     if (fileSize == 0) {
         printf ("  File is empty: %s\n", filepath);
         fclose (file);
@@ -1096,7 +1214,7 @@ void try_read_file (
     fread (pBytes, 1, fileSize, file);
     fclose (file);
 
-    // Array to list of noteblocks
+    // Array of bytes to list of noteblocks
     struct noteblock* p1stNoteblock;
     int errIndex;
     unsigned char parseResult;
@@ -1128,9 +1246,10 @@ void try_read_file (
 }
 
 
-char* str_example (
-    // Returns example string printed when user uses cmd line option -v, or NULL on error
-){
+// Returns example string printed when user uses cmd line option -v.
+// If an error occurs, prints error information and returns NULL.
+char* str_example ()
+{
     unsigned char parseResult;
     struct noteblock* p1stNoteblock;
     int errIndex;
@@ -1148,6 +1267,7 @@ char* str_example (
 }
 
 
+// Test performance by constructing str_example count times
 void test_performance (
     char* countStr // String representing how many times to call str_example. Should be >= 10.
 ){
@@ -1195,6 +1315,7 @@ void test_performance (
 }
 
 
+// Main entry point that a user can call from the command line
 void main (
     int   argc,  // Count of command-line argument strings, including program name
     char* argv[] // Array of command-line argument strings (first actual argument is argv[1])
