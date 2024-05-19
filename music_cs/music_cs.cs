@@ -325,7 +325,7 @@ namespace MusicCS {
         static char? preNoteheadCharacter (
             byte byte1,   // Bits 1-8 of note encoding. Bits 3-8 are relevant here.
             bool prevTied // Whether the previous note is tied to this one.
-            // Returns the character to use left of the notehead, or ASCII character 1 if existing
+            // Returns the character to use left of the notehead, or null if existing
             // character should be used.
         ){
             return prevTied ? '_' : ACCIDENTAL_CHARS[byte1 >> 6]; // Index is bits 7-8
@@ -336,7 +336,7 @@ namespace MusicCS {
 
         static char? articulationNoteheadCharacter (
             byte byte2  // Bits 9-16 of note encoding. Bits 15-16 are relevant here.
-            // Returns the character to use above/below the notehead, or ASCII character 1 if existing
+            // Returns the character to use above/below the notehead, or null if existing
             // character should be used.
         ){
             return ARTICULATION_CHARS[byte2 >> 6]; // Index is bits 15-16
@@ -345,7 +345,7 @@ namespace MusicCS {
 
         static char? postNoteheadCharacter (
             byte byte2 // Bits 9-16 of note encoding. Bits 13-14 are relevant here.
-            // Returns the character to use left of the notehead, or ASCII character 1 if existing
+            // Returns the character to use left of the notehead, or null if existing
             // character should be used.
         ){
             return noteheadIsDotted (byte2) ? '.' : noteheadTiedToNext (byte2) ? '_' : null;
