@@ -1071,7 +1071,7 @@ void append_staff_row_initial (
     while (pCurrentNoteblock != NULL) {
         char* pRow = &((pCurrentNoteblock->text)[row][0]);
         if (*pIdxInStr >= unsafeIdxInStr) {
-            char width = pRow[0] != '\0' + pRow[1] != '\0' + pRow[2] != '\0' + pRow[3] != '\0' + pRow[4] != '\0';
+            char width = (pRow[0] != '\0') + (pRow[1] != '\0') + (pRow[2] != '\0') + (pRow[3] != '\0') + (pRow[4] != '\0');
             if (*pIdxInStr + width >= limitIdxInStr) { break; }
         }
         if (pRow[0] != '\0') { str[*pIdxInStr] = pRow[0]; ++(*pIdxInStr); }
