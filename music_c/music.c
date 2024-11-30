@@ -6,9 +6,9 @@
 
 
 #include <limits.h> // UINT_MAX
-#include <stdio.h>  // printf
+#include <stdio.h>  // printf, fopen_s
 #include <stdlib.h> // malloc, atoi
-#include <stddef.h> // NULL, fopen - sometimes included elsewhere automatically, but not here
+#include <stddef.h> // NULL
 #include <string.h> // strcmp
 #include <time.h>   // time
 
@@ -141,9 +141,9 @@ const char EXAMPLE_BYTES[] = {
 
 
 
-//*********************
-// Noteblock structure
-//*********************
+//********************************************************************
+// Noteblock struct - data structure, constants, and simple functions
+//********************************************************************
 
 // Structure for text used by a note, time signature, key signature, barline, etc.
 // Also has pointer to next noteblock in linked list of noteblocks
@@ -178,6 +178,35 @@ struct noteblock {
 #define ROW_LO_C  (2)
 #define ROW_LO_B  (1)
 #define ROW_TEXT  (0)
+
+
+// Given a noteblock, get a pointer to its text array
+inline char* get_ptr_to_text (
+    struct noteblock* pNoteblock // Pointer to a noteblock
+    // Returns pointer to *pNoteblock's 2-dimensional array of text
+){
+    return &((pNoteblock->text)[0][0]);
+}
+
+// Given a noteblock and a row number, get a pointer to that row in the noteblock's text array
+inline char* get_ptr_to_row_from_noteblock (
+    struct noteblock* pNoteblock, // Pointer to a noteblock
+    unsigned char     row         // Row number (0-15)
+    // Returns pointer to the row in *pNoteblock's 2-dimensional array of text
+){
+    return &((pNoteblock->text)[row][0]);
+}
+
+// Given a noteblock's text array and a row number, get a pointer to that row in the text array
+inline char* get_ptr_to_row_from_text (
+    char*         pText, // Pointer to a noteblock's 2-dimensional array of text
+    unsigned char row    // Row number (0-15)
+    // Returns pointer to the row in *pText
+){
+    return pText + (row * NOTEBLOCK_WIDTH);
+    // We can't just do pText[row] because the compiler doesn't know that each row is 5 bytes.
+    // pText[row] is not a pointer to an array of characters, it is an actual character in the 2D array.
+}
 
 
 
@@ -378,16 +407,6 @@ inline char row_is_space (
 }
 
 
-// Get a pointer to a noteblock's text array
-inline char* get_ptr_to_text (
-    struct noteblock* pNoteblock // Pointer to a noteblock
-    // Returns pointer to *pNoteblock's 2-dimensional array of text
-){
-    return &(pNoteblock->text[0][0]);
-}
-
-
-
 //***********************
 // Larger misc. function
 //***********************
@@ -425,9 +444,7 @@ void draw_row (
     // Below: Characters to copy to the 5-character long row. Pass 1 to keep existing char.
     char c0, char c1, char c2, char c3, char c4
 ){
-    char* pTextRow = pText + (row * NOTEBLOCK_WIDTH);
-    // We can't just do pText[row] because the compiler doesn't know that each row is 5 bytes.
-    // pText[row] is not a pointer to an array of characters, it is an actual character in the 2D array.
+    char* pTextRow = get_ptr_to_row_from_text (pText, row);
     if (c0 != 1) pTextRow[0] = c0;
     if (c1 != 1) pTextRow[1] = c1;
     if (c2 != 1) pTextRow[2] = c2;
@@ -443,7 +460,7 @@ void draw_row_raw (
     // Below: Characters to copy to the 5-character long row. 1 is treated like a normal character.
     char c0, char c1, char c2, char c3, char c4
 ){
-    char* pTextRow = pText + (row * NOTEBLOCK_WIDTH);
+    char* pTextRow = get_ptr_to_row_from_text (pText, row);
     pTextRow[0] = c0; pTextRow[1] = c1; pTextRow[2] = c2; pTextRow[3] = c3; pTextRow[4] = c4;
 }
 
@@ -1069,7 +1086,7 @@ void append_staff_row_initial (
     unsigned int unsafeIdxInStr = limitIdxInStr - NOTEBLOCK_WIDTH;
     struct noteblock* pCurrentNoteblock = pStaffHead;
     while (pCurrentNoteblock != NULL) {
-        char* pRow = &((pCurrentNoteblock->text)[row][0]);
+        char* pRow = get_ptr_to_row_from_noteblock (pCurrentNoteblock, row);
         if (*pIdxInStr >= unsafeIdxInStr) {
             char width = (pRow[0] != '\0') + (pRow[1] != '\0') + (pRow[2] != '\0') + (pRow[3] != '\0') + (pRow[4] != '\0');
             if (*pIdxInStr + width >= limitIdxInStr) { break; }
@@ -1099,7 +1116,7 @@ void append_staff_row_subsequent (
 ){
     struct noteblock* pCurrentNoteblock = pStaffHead;
     while (pCurrentNoteblock != pStaffHeadNext  && pCurrentNoteblock != NULL) {
-        char* pRow = &((pCurrentNoteblock->text)[row][0]);
+        char* pRow = get_ptr_to_row_from_noteblock (pCurrentNoteblock, row);
         if (pRow[0] != '\0') { str[*pIdxInStr] = pRow[0]; ++(*pIdxInStr); }
         if (pRow[1] != '\0') { str[*pIdxInStr] = pRow[1]; ++(*pIdxInStr); }
         if (pRow[2] != '\0') { str[*pIdxInStr] = pRow[2]; ++(*pIdxInStr); }
