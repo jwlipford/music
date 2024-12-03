@@ -35,14 +35,23 @@ const char* STR_ENCODING =
 "    $b=[byte[]]@(0x53,0x61,0x75,0x63,0x65)\n"
 "    set-content encoded_song $b -encoding byte\n"
 "  FILE ENCODING\n"
-"  The file consists of groups of bytes that represent \"noteblocks\", which are rectangles of text 16\n"
-"  characters high and at most 5 characters wide. At most 4 bytes represent one noteblock.\n"
-"  In the following descriptions, we count bits from the right, the 1's place, starting at 1.\n"
-"  For example, in the bit string 10010, bits 2 and 5 are the 1s; bits 1, 3, and 4 are the 0s.\n"
-"  For two bytes, their bits numbered in base 32 are: 87654321 GFEDCBA9.\n"
+"  File structure:\n"
+"    A file consists of 1 or more groups of 1-4 bytes. Most byte groups represent \"noteblocks.\"\n"
+"    A noteblock is a rectangle of text, 16 characters high and 1-5 characters wide, that represents a clef,\n"
+"    note, barline, or some other large element of music notation.\n"
+"    Noteblocks are added to the end of the staff one by one.\n"
+"    Additionally, a dynamics text byte group modifies the previous byte group's noteblock.\n"
+"    Finally, a terminator byte is required at the end of the file.\n"
+"  Invalid input:\n"
+"    If you ever see a capital E or the string \"ERROR\" in the generated music, your file has invalid input.\n"
+"  Bit notation:\n"
+"    In the following byte group descriptions, we count bits from the right, the 1's place, starting at 1.\n"
+"    For example, in the bit string 10010, the zeros are bits 1, 3, and 4; the ones are bits 2 and 5.\n"
+"    For two bytes, their bits numbered in base 32 are: 87654321 GFEDCBA9.\n"
+"  BYTE GROUP TYPES\n"
 "  Terminator (1 byte):\n"
 "    Bits 1-8: Always 00000000\n"
-"  Note (2 bytes):\n"
+"  Note/Rest (2 bytes):\n"
 "    Bits 1-2:   Always 01\n"
 "    Bits 3-6:   Rest (0) or pitches low B (1) to middle B (8) to high B (15)\n"
 "    Bits 7-8:   Accidentals - none (0), flat ('b') (1), natural ('~') (2), or sharp ('#') (3)\n"
@@ -87,8 +96,7 @@ const char* STR_ENCODING =
 "  Clef (1 byte):\n"
 "    Elsewhere in these descriptions, pitch names assume treble clef, but here you can draw a different clef.\n"
 "    Bits 1-6: Always 100000\n"
-"    Bits 7-8: Type - Treble (0), bass (1), percussion (2)\n"
-"  If you ever see a capital 'E' or the string \"ERROR\" in the generated music, your file has invalid input.\n";
+"    Bits 7-8: Type - Treble (0), bass (1), percussion (2)\n";
 
 // Example song to illustrate visual style of output. Used by str_example function.
 const unsigned char EXAMPLE_BYTES[] = {
@@ -161,7 +169,7 @@ struct noteblock {
 };
 
 
-// Rows (some unused, but defining all)
+// ROW constants (some unused, but defining all)
 
 #define ROW_HI_B (15)
 #define ROW_HI_A (14)
@@ -207,6 +215,18 @@ inline char* get_ptr_to_row_from_text (
     return pText + (row * NOTEBLOCK_WIDTH);
     // We can't just do pText[row] because the compiler doesn't know that each row is 5 bytes.
     // pText[row] is not a pointer to an array of characters, it is an actual character in the 2D array.
+}
+
+// Count noteblocks including and following a given noteblock
+unsigned int count_noteblocks (
+    struct noteblock* pNoteblock // Pointer to a noteblock. It and following will be counted.
+){
+    unsigned int count = 0;
+    while (pNoteblock != NULL) {
+        pNoteblock = pNoteblock->pNext;
+        ++count;
+    }
+    return count;
 }
 
 
@@ -333,7 +353,7 @@ inline int notehead_is_dotted (
 
 
 // Whether a note-type noteblock's notehead is tied to the next note
-inline int notehead_tied_to_next (
+inline int notehead_is_tied_to_next (
     unsigned char byte2 // Bits 9-16 of note encoding. Bit 14 is relevant here.
 ){
     return (byte2 & 0b100000) > 0;
@@ -376,7 +396,7 @@ inline char post_notehead_character (
     // Returns the character to use left of the notehead, or ASCII character 1 if existing
     // character should be used.
 ){
-    return notehead_is_dotted (byte2) ? '.' : notehead_tied_to_next (byte2) ? '_' : 1;
+    return notehead_is_dotted (byte2) ? '.' : notehead_is_tied_to_next (byte2) ? '_' : 1;
 }
 
 
@@ -408,9 +428,51 @@ inline int row_is_space (
 }
 
 
-//***********************
-// Larger misc. function
-//***********************
+//************************
+// Larger misc. functions
+//************************
+
+// BYTE_GROUP_TYPE constants representing the type of a byte group (1-4 bytes from the encoded file).
+// For fun, rather than using consecutive integers, I made each constant resemble the binary number(s)
+// that represent it, but this doesn't drive functionality.
+
+#define BYTE_GROUP_TYPE_TERMINATOR  (0b00000000)
+#define BYTE_GROUP_TYPE_NOTE        (0b00000001)
+#define BYTE_GROUP_TYPE_TIME_CHANGE (0b00000010)
+#define BYTE_GROUP_TYPE_KEY_CHANGE  (0b00000011)
+#define BYTE_GROUP_TYPE_BARLINE     (0b00000100)
+#define BYTE_GROUP_TYPE_DYN_TEXT    (0b00001000)
+#define BYTE_GROUP_TYPE_CLEF        (0b00100000)
+#define BYTE_GROUP_TYPE_INVALID     (0b11010000)
+
+
+// Get a byte group's type from the first byte in the group
+int byte_group_type (
+    unsigned char byte1 // Bits 1-8 of note encoding.
+    // Returns one of the BYTE_GROUP_TYPE constants.
+){
+    // At this point, we know nothing about byte1
+    switch (byte1 & 0b11) {
+        case 0b01: return BYTE_GROUP_TYPE_NOTE;
+        case 0b10: return BYTE_GROUP_TYPE_TIME_CHANGE;
+        case 0b11: return BYTE_GROUP_TYPE_KEY_CHANGE;
+    }
+    // At this point, we know byte1 & 0b11 == 0b00
+    switch (byte1 & 0b1100) {
+        case 0b0100: return BYTE_GROUP_TYPE_BARLINE;
+        case 0b1000: return BYTE_GROUP_TYPE_DYN_TEXT;
+        case 0b1100: return BYTE_GROUP_TYPE_INVALID;
+    }
+    // At this point, we know byte1 & 0b1111 == 0b0000
+    switch (byte1 & 0b110000) {
+        case 0b100000: return BYTE_GROUP_TYPE_CLEF;
+    }
+    switch (byte1) {
+        case 0: return BYTE_GROUP_TYPE_TERMINATOR;
+    }
+    return BYTE_GROUP_TYPE_INVALID;
+}
+
 
 // Get the height of a note's stem
 int stem_height (
@@ -515,12 +577,11 @@ const char DYNAMICS_CHARACTERS[16] = { 'E', '\0', ' ', '<', '>', '.', 'c', 'd', 
 
 // Draw the dynamics text row (bottom row, 0) in a noteblock
 void draw_dynamics_text_row (
-    struct noteblock* pNoteblock, // (Pointer to) the noteblock in which to draw.
-    unsigned char     byte1,      // Bits 1-8 of dynamics text encoding. Bits 1-4 should be 1000.
-    unsigned char     byte2,      // Bits 9-16 of dynamics text encoding.
-    unsigned char     byte3       // Bits 17-24 of dynamics text encoding.
+    char*         pText, // (Pointer to) a noteblock's 2D array of text, in which to draw the dynamics text.
+    unsigned char byte1, // Bits 1-8 of dynamics text encoding. Bits 1-4 should be 1000.
+    unsigned char byte2, // Bits 9-16 of dynamics text encoding.
+    unsigned char byte3  // Bits 17-24 of dynamics text encoding.
 ){
-    char* pText = get_ptr_to_text (pNoteblock);
     unsigned char charBits;
     charBits = byte1 / 16; // Bits 5-8
     char c0 = DYNAMICS_CHARACTERS[charBits];
@@ -638,13 +699,19 @@ void draw_articulation (
 
 // Draws a 3-character notehead, as well as the characters to the left and right, for 5 total.
 void draw_notehead (
-    char*         pText,   // (Pointer to) a noteblock's 2D array text, in which to draw the notehead.
-    unsigned char byte1,   // Bits 1-8 of note encoding.
-    unsigned char byte2,   // Bits 9-16 of note encoding.
-    int           prevTied // Whether the previous note is tied to this one.
+    char*         pText,    // (Pointer to) a noteblock's 2D array text, in which to draw the notehead.
+    unsigned char byte1,    // Bits 1-8 of note encoding.
+    unsigned char byte2,    // Bits 9-16 of note encoding.
+    unsigned int  parseInfo // Info stored between calls to parse_byte_group - see update_parse_info.
 ){
     char preNoteheadChar, leftChar, fillChar, rightChar, postNoteheadChar; // 5 characters to draw
+
+    unsigned char prevByte2ForTie = (parseInfo & 0x00FF0000) >> 16;
+    int prevTied = notehead_is_tied_to_next (prevByte2ForTie);
+    preNoteheadChar = pre_notehead_character (byte1, prevTied); // 'b', '~', '#', or existing
+
     int noteheadRow = notehead_row (byte1); // Row to draw in
+
     if (note_has_stem (byte2)) {
         int orientation = note_orientation (byte1);
         leftChar = (orientation > 0) ? '(' : '|';
@@ -661,42 +728,36 @@ void draw_notehead (
         draw_row_error (pText, noteheadRow);
         return;
     }
-    preNoteheadChar = pre_notehead_character (byte1, prevTied); // 'b', '~', '#', or existing
+
     postNoteheadChar = post_notehead_character (byte2); // '.', '_', or existing
+
     draw_row (pText, noteheadRow, preNoteheadChar, leftChar, fillChar, rightChar, postNoteheadChar);
 }
 
 
-// Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
-void draw_stem_flags_beams (
-    char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw.
-    unsigned char byte1,         // Bits 1-8 of note encoding.
-    unsigned char byte2,         // Bits 9-16 of note encoding.
-    int           countLeftBeams // How many beams (0-2) this note should have on the left, if beamed.
+// Draw a note's stem, if it has one
+void draw_stem (
+    char* pText,       // (Pointer to) a noteblock's 2D array text, in which to draw.
+    int   noteheadRow, // Row that the notehead is on. The bottom of the stem starts on an adjacent row.
+    int   stemTopRow,  // Row that the top of the stem is on.
+    int   orientation  // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
 ){
-    int stemHeight = stem_height (byte1, byte2);
-    if (stemHeight == 0) { return; }
-    int noteheadRow = notehead_row (byte1);
-    int orientation = note_orientation (byte1);
-    int stemTopRow = noteheadRow + (orientation * stemHeight); // "top" meaning farthest from notehead
-
-    // Draw stem
-    int row = noteheadRow + orientation;
-    while (1) {
-        if (orientation > 0) {
-            draw_row (pText, row, 1, 1, 1, '|', 1);
-        }
-        else {
-            draw_row (pText, row, 1, '|', 1, 1, 1);
-        }
-        if (row == stemTopRow) {
-            break;
-        }
-        row += orientation;
+    char c2 = (orientation > 0) ? 1 : '|';
+    char c4 = (orientation > 0) ? '|' : 1;
+    for (int row = stemTopRow; row != noteheadRow; row -= orientation) {
+        draw_row (pText, row, 1, c2, 1, c4, 1);
     }
+}
 
-    // Draw flags, if any
-    int countFlags = count_note_flags (byte2);
+
+// Draw a note's flags, if it has any
+void draw_flags (
+    char* pText,       // (Pointer to) a noteblock's 2D array text, in which to draw.
+    int   countFlags,  // Number of flags to draw, 0-2.
+    int   stemTopRow,  // Row that the top of the stem is on. If there are two flags, this function will
+                       // draw one on this row and the other on the adjacent row closer to the notehead.
+    int   orientation  // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
+){
     if (countFlags >= 1) {
         char char3 = (orientation > 0) ? 1 : '/';
         char char5 = (orientation > 0) ? '\\' : 1;
@@ -705,49 +766,83 @@ void draw_stem_flags_beams (
             draw_row (pText, (stemTopRow - orientation), 1, 1, char3, 1, char5);
         }
     }
+}
+
+
+// Draw a note's beams, if it has any
+void draw_beams (
+    char* pText,       // (Pointer to) a noteblock's 2D array text, in which to draw.
+    int   countLeftBeams,  // Number of beams to draw on the left of the stem, 0-2.
+    int   countRightBeams, // Number of beams to draw on the right of the stem, 0-2.
+    int   stemTopRow,  // Row that the top of the stem is on. If there are two beams, this function will
+                       // draw one on this row and the other on the adjacent row closer to the notehead.
+    int   orientation  // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
+){
+    if (countLeftBeams == 0 && countRightBeams == 0) {
+        return; // If, for example, the user accidentally has a non-beamed note followed by a left-beamed note
+    }
+    if (orientation > 0) {
+        // Left beam(s)
+        if (countLeftBeams >= 1) {
+            draw_row (pText, (stemTopRow + 1), '_', '_', '_', 1, 1);
+            if (countLeftBeams == 2) {
+                draw_row (pText, stemTopRow, '_', '_', '_', 1, 1);
+            }
+        }
+        // Possible middle beam char above stem
+        if (countLeftBeams >= 1 && countRightBeams >= 1) {
+            draw_row (pText, (stemTopRow + 1), 1, 1, 1, '_', 1);
+        }
+        // Right beams
+        if (countRightBeams >= 1) {
+            draw_row (pText, (stemTopRow + 1), 1, 1, 1, 1, '_');
+            if (countRightBeams == 2) {
+                draw_row (pText, stemTopRow, 1, 1, 1, 1, '_');
+            }
+        }
+    }
+    else {
+        // Left beam(s)
+        if (countLeftBeams >= 1) {
+            draw_row (pText, stemTopRow, '_', 1, 1, 1, 1);
+            if (countLeftBeams == 2) {
+                draw_row (pText, (stemTopRow + 1), '_', 1, 1, 1, 1);
+            }
+        }
+        // Right beam(s)
+        if (countRightBeams >= 1) {
+            draw_row (pText, stemTopRow, 1, 1, '_', '_', '_');
+            if (countRightBeams == 2) {
+                draw_row (pText, (stemTopRow + 1), 1, 1, '_', '_', '_');
+            }
+        }
+    }
+}
+
+
+// Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
+void draw_stem_flags_beams (
+    char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw.
+    unsigned char byte1,         // Bits 1-8 of note encoding.
+    unsigned char byte2,         // Bits 9-16 of note encoding.
+    unsigned int  parseInfo // How many beams (0-2) this note should have on the left, if beamed.
+){
+    int stemHeight = stem_height (byte1, byte2);
+    if (stemHeight == 0) { return; }
+    int noteheadRow = notehead_row (byte1);
+    int orientation = note_orientation (byte1);
+    int countFlags = count_note_flags (byte2);
+    int stemTopRow = noteheadRow + (orientation * stemHeight); // "top" meaning farthest from notehead
+
+    draw_stem (pText, noteheadRow, stemTopRow, orientation);
+    draw_flags (pText, countFlags, stemTopRow, orientation);
 
     // Draw beams, if any
-    else if (note_has_beams (byte2)) {
+    if (note_has_beams (byte2)) {
+        unsigned char prevByte2ForBeams = (parseInfo & 0x0000FF00) >> 8;
+        int countLeftBeams = count_note_beams_right (prevByte2ForBeams);
         int countRightBeams = count_note_beams_right (byte2);
-        if (countLeftBeams == 0 && countRightBeams == 0) {
-            return; // If, for example, the user accidentally has a non-beamed note followed by a left-beamed note
-        }
-        if (orientation > 0) {
-            // Left beam(s)
-            if (countLeftBeams >= 1) {
-                draw_row (pText, (stemTopRow + 1), '_', '_', '_', 1, 1);
-                if (countLeftBeams == 2) {
-                    draw_row (pText, stemTopRow, '_', '_', '_', 1, 1);
-                }
-            }
-            // Possible middle beam char above stem
-            if (countLeftBeams >= 1 && countRightBeams >= 1) {
-                draw_row (pText, (stemTopRow + 1), 1, 1, 1, '_', 1);
-            }
-            // Right beams
-            if (countRightBeams >= 1) {
-                draw_row (pText, (stemTopRow + 1), 1, 1, 1, 1, '_');
-                if (countRightBeams == 2) {
-                    draw_row (pText, stemTopRow, 1, 1, 1, 1, '_');
-                }
-            }
-        }
-        else {
-            // Left beam(s)
-            if (countLeftBeams >= 1) {
-                draw_row (pText, stemTopRow, '_', 1, 1, 1, 1);
-                if (countLeftBeams == 2) {
-                    draw_row (pText, (stemTopRow + 1), '_', 1, 1, 1, 1);
-                }
-            }
-            // Right beam(s)
-            if (countRightBeams >= 1) {
-                draw_row (pText, stemTopRow, 1, 1, '_', '_', '_');
-                if (countRightBeams == 2) {
-                    draw_row (pText, (stemTopRow + 1), 1, 1, '_', '_', '_');
-                }
-            }
-        }
+        draw_beams (pText, countLeftBeams, countRightBeams, stemTopRow, orientation);
     }
 }
 
@@ -759,9 +854,9 @@ void draw_stem_flags_beams (
 
 // Make a note-type noteblock
 struct noteblock* make_note (
-    unsigned char byte1, // Bits 1-8 of note encoding. Bits 1-2 should be 00.
-    unsigned char byte2, // Bits 9-16 of note encoding
-    int           info   // Info stored between calls to parse_bytes
+    unsigned char byte1,    // Bits 1-8 of note encoding. Bits 1-2 should be 00.
+    unsigned char byte2,    // Bits 9-16 of note encoding.
+    unsigned int  parseInfo // Info stored between calls to parse_byte_group - see update_parse_info.
     // Returns pointer to new noteblock.
 ){
     struct noteblock* pNoteblock = malloc (sizeof (struct noteblock));
@@ -778,8 +873,8 @@ struct noteblock* make_note (
     }
     else {
         draw_articulation (pText, byte1, byte2);
-        draw_notehead (pText, byte1, byte2, (info & 0b100) > 0);
-        draw_stem_flags_beams (pText, byte1, byte2, (info & 0b11));
+        draw_notehead (pText, byte1, byte2, parseInfo);
+        draw_stem_flags_beams (pText, byte1, byte2, parseInfo);
     }
 
     return pNoteblock;
@@ -915,19 +1010,6 @@ struct noteblock* make_clef (
 // High-level functions dealing with multiple noteblocks
 //*******************************************************
 
-// Count noteblocks including and following a given noteblock
-unsigned int count_noteblocks (
-    struct noteblock* pNoteblock // Pointer to a noteblock. It and following will be counted.
-){
-    unsigned int count = 0;
-    while (pNoteblock != NULL) {
-        pNoteblock = pNoteblock->pNext;
-        ++count;
-    }
-    return count;
-}
-
-
 // Deallocate memory for a noteblock and following noteblocks
 void free_noteblocks (
     struct noteblock* pNoteblock // Pointer to noteblock. It and following will be freed.
@@ -940,86 +1022,109 @@ void free_noteblocks (
 }
 
 
-#define PARSE_RESULT_PARSED_NOTEBLOCK      (0)
-#define PARSE_RESULT_PARSED_ALL            (1)
-#define PARSE_RESULT_UNEXPECTED_TERMINATOR (2)
-#define PARSE_RESULT_INVALID_BYTE          (3)
-#define PARSE_RESULT_INTERNAL_ERROR        (4)
+// Updates the parseInfo variable, which stores three sub-values between calls to parse_byte_group.
+//   parseInfo byte 1 - byte group type of current byte group.
+//   parseInfo byte 2 - byte2 of most recent note-type noteblock, zeroed between measures.
+//   parseInfo byte 3 - byte2 of most recent note-type noteblock, preserved across measures.
+unsigned int update_parse_info (
+    unsigned int  oldParseInfo,     // parseInfo from previous call to parse_byte_group.
+    unsigned char newByteGroupType, // BYTE_GROUP_TYPE constant from current call to parse_byte_group.
+    unsigned char newByte2          // Used only if new byte group type is note - bits 17-32 of note encoding.
+){
+    switch (newByteGroupType) {
+        case BYTE_GROUP_TYPE_NOTE:
+            // Set bytes 2 and 3 to newByte2, byte 1 to newByteGroupType
+            return (newByte2 << 16) | (newByte2 << 8) | newByteGroupType;
+        case BYTE_GROUP_TYPE_BARLINE:
+            // Preserve byte 3, zero byte 2, set byte 1 to newByteGroupType
+            return (oldParseInfo & 0x00FF0000) | newByteGroupType;
+        default:
+            // Preserve bytes 3 and 2, set byte 1 to newByteGroupType
+            return (oldParseInfo & 0x00FFFF00) | newByteGroupType;
+    }
+}
 
-// Parse one or more encoded bytes, creating a new noteblock
-int parse_bytes (
+
+// PARSE_RESULT constants representing the result of trying to parse one or more encoded bytes.
+
+#define PARSE_RESULT_PARSED_NOTEBLOCK      (0) // Parsed one noteblock.
+#define PARSE_RESULT_PARSED_ALL            (1) // Parsed all noteblocks in array of bytes.
+#define PARSE_RESULT_UNEXPECTED_TERMINATOR (2) // Failed to parse - found terminator byte (0) at invalid location.
+#define PARSE_RESULT_INVALID_BYTE          (3) // Failed to parse - found an invalid byte.
+#define PARSE_RESULT_INTERNAL_ERROR        (4) // Failed to parse - internal error, such as out of memory.
+
+
+// Parse one byte group. This usually creates a new noteblock.
+int parse_byte_group (
     const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read.
     int*                 pIndex,      // Pointer to index in array of bytes. Calling this function usually increases it.
     struct noteblock**   ppNoteblock, // Pointer to pointer to current noteblock (or pointer to NULL if none). If this
         // function creates a new noteblock, *ppNoteblock will point to it afterwards. If a terminator is parsed,
         // *ppNoteblock will be set to NULL.
-    int*                 pInfo        // Pointer to info stored between calls to this function.
-        // Bits 1-2 - number of beams (0-2) most recent note in this measure had, or 0 if no previous note in measure.
-        // Bit 3 - whether most recent note (not necessarily in measure) had a tie on its right.
-        // Bit 4 - whether previous noteblock was dynamics text.
+    unsigned int*        pParseInfo   // Pointer to info stored between calls to this function - see update_parse_info.
     // Returns one of the PARSE_RESULTs.
 ){
     if (ppNoteblock == NULL) { return PARSE_RESULT_INTERNAL_ERROR; } // *ppNoteblock can be NULL, but ppNoteblock can't
-    unsigned char byte1, byte2, byte3, byte4; // Rarely all four used
+
+    unsigned char byte1 = pBytes[*pIndex]; ++(*pIndex);
+    unsigned char byte2 = 0, byte3 = 0, byte4 = 0; // May be set later depending on byte group type
     struct noteblock* pNewNoteblock = NULL;
+    int byteGroupType = byte_group_type (byte1);
 
-    // enum local to this function, used only for maintaining *pInfo
-    enum type_enum { BARLINE, DYNAMICS, NOTE, OTHER };
-    enum type_enum type = OTHER; // By default, unless otherwise assigned
-
-    byte1 = pBytes[*pIndex]; ++(*pIndex);
-    switch (byte1 & 0b11) {
-        case 0b00: switch (byte1 & 0b1111) {
-            case 0b0000: switch (byte1 & 0b111111) {
-                case 0b000000: switch (byte1) {
-                    case 0: // Terminator, 1 byte
-                        *ppNoteblock = NULL;
-                        return PARSE_RESULT_PARSED_ALL;
-                    default: // Shouldn't happen
-                        return PARSE_RESULT_INVALID_BYTE;
-                } break;
-                case 0b100000: // Clef, 1 byte
-                    pNewNoteblock = make_clef (byte1);
-                    break;
-                default: // Shouldn't happen
-                    return PARSE_RESULT_INVALID_BYTE;
-            } break;
-            case 0b0100: // Barline, 1 byte
-                pNewNoteblock = make_barline (byte1);
-                type = BARLINE;
-                break;
-            case 0b1000: // Dynamics text, 3 bytes
-                // This is the only set of bytes that modifies the current noteblock rather than creating a new one.
-                if (
-                    *ppNoteblock == NULL // Can't have dynamics text without a preceding noteblock
-                    || *pInfo & 0b1000   // Can't have dynamics text twice consecutively
-                ) {
-                    return PARSE_RESULT_INVALID_BYTE;
-                }
-                byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-                byte3 = pBytes[*pIndex]; ++(*pIndex); if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-                draw_dynamics_text_row (*ppNoteblock, byte1, byte2, byte3);
-                type = DYNAMICS;
-                break;
-            default: // 0b1100, shouldn't happen
-                return PARSE_RESULT_INVALID_BYTE;
-        } break;
-        case 0b01: // Note, 2 bytes
-            byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            pNewNoteblock = make_note (byte1, byte2, *pInfo);
-            type = NOTE;
+    switch (byteGroupType) {
+        case BYTE_GROUP_TYPE_INVALID:
+            // 1 byte
+            return PARSE_RESULT_INVALID_BYTE;
+        case BYTE_GROUP_TYPE_TERMINATOR:
+            // 1 byte
+            *ppNoteblock = NULL;
+            return PARSE_RESULT_PARSED_ALL;
+        case BYTE_GROUP_TYPE_CLEF:
+            // 1 byte
+            pNewNoteblock = make_clef (byte1);
             break;
-        case 0b10: // Time signature, 1 byte
-            pNewNoteblock = make_time_signature (byte1);
-            break;
-        case 0b11: // Key signature, 4 bytes
-            byte2 = pBytes[*pIndex]; ++(*pIndex); if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            byte3 = pBytes[*pIndex]; ++(*pIndex); if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            byte4 = pBytes[*pIndex]; ++(*pIndex); if (byte4 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+        case BYTE_GROUP_TYPE_KEY_CHANGE:
+            // 2 bytes
+            byte2 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            byte3 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            byte4 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte4 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
             unsigned short bits01to16 = ((unsigned short)byte2 << 8) + byte1;
             unsigned short bits17to32 = ((unsigned short)byte4 << 8) + byte3;
             pNewNoteblock = make_key_signature (bits01to16, bits17to32);
             break;
+        case BYTE_GROUP_TYPE_TIME_CHANGE:
+            // 1 byte
+            pNewNoteblock = make_time_signature (byte1);
+            break;
+        case BYTE_GROUP_TYPE_NOTE:
+            // 2 bytes
+            byte2 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            pNewNoteblock = make_note (byte1, byte2, *pParseInfo);
+            break;
+        case BYTE_GROUP_TYPE_BARLINE:
+            // 1 byte
+            pNewNoteblock = make_barline (byte1);
+            break;
+        case BYTE_GROUP_TYPE_DYN_TEXT: {
+            // 3 bytes
+            // This is the only set of bytes that modifies the current noteblock rather than creating a new one.
+            // Dynamics text can't be the first byte group or appear twice consecutively.
+            int prevByteGroupType = *pParseInfo & 0xFF;
+            if (ppNoteblock == NULL || prevByteGroupType == 0 || prevByteGroupType == BYTE_GROUP_TYPE_DYN_TEXT) {
+                return PARSE_RESULT_INVALID_BYTE;
+            }
+            char* pText = get_ptr_to_text (*ppNoteblock);
+            byte2 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            byte3 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            draw_dynamics_text_row (pText, byte1, byte2, byte3);
+            break;
+        }
     }
 
     // Unless type was dynamics text, a new noteblock should have been created.
@@ -1027,14 +1132,14 @@ int parse_bytes (
         if (*ppNoteblock != NULL) { (*ppNoteblock)->pNext = pNewNoteblock; }
         *ppNoteblock = pNewNoteblock;
     }
-    else if (type != DYNAMICS) {
+    else if (byteGroupType != BYTE_GROUP_TYPE_DYN_TEXT) {
         *ppNoteblock = NULL;
         return PARSE_RESULT_INTERNAL_ERROR; // Probably ran out of memory
     }
 
-    *pInfo = ((type == BARLINE) ? 0 : (type == NOTE) ? count_note_beams (byte2) : (*pInfo & 0b11)) // bits 1-2
-        + ((type == NOTE) ? (notehead_tied_to_next (byte2) << 2) : (*pInfo & 0b100)) // bit 3
-        + ((type == DYNAMICS) << 3); // bit 4
+    // Update parseInfo
+    *pParseInfo = update_parse_info (*pParseInfo, (unsigned char)byteGroupType, byte2);
+
     return PARSE_RESULT_PARSED_NOTEBLOCK;
 }
 
@@ -1047,13 +1152,12 @@ int parse_bytes_start_to_end (
     // Returns one of the PARSE_RESULTs
 ){
     int index = 0;
-    int info = 0;
-
-    *pp1stNoteblock = NULL; // Set this so parse_bytes knows it's at the first noteblock
-    int parseResult = parse_bytes (pBytes, &index, pp1stNoteblock, &info);
+    unsigned int parseInfo = 0;
+    *pp1stNoteblock = NULL; // Set to NULL so parse_byte_group knows it's at the first noteblock
+    int parseResult = parse_byte_group (pBytes, &index, pp1stNoteblock, &parseInfo);
     struct noteblock* pNoteblock = *pp1stNoteblock;
     while (parseResult == PARSE_RESULT_PARSED_NOTEBLOCK) {
-        parseResult = parse_bytes (pBytes, &index, &pNoteblock, &info);
+        parseResult = parse_byte_group (pBytes, &index, &pNoteblock, &parseInfo);
     }
     *pErrIndex = (parseResult == PARSE_RESULT_PARSED_ALL) ? -1 : index - 1;
     return parseResult;
@@ -1215,7 +1319,7 @@ void try_read_file (
     fseek (file, 0, SEEK_END);
     int fileSize = ftell (file);
     rewind (file);
-    
+
     // Validate file size
     if (fileSize == 0) {
         printf ("  File is empty: %s\n", filepath);
@@ -1284,7 +1388,7 @@ char* str_example ()
         free_noteblocks (p1stNoteblock);
         return NULL;
     }
-    
+
     char* str = noteblocks_to_string (p1stNoteblock, EXAMPLE_WIDTH);
     free_noteblocks (p1stNoteblock);
     return str;
