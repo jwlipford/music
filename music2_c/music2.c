@@ -434,6 +434,28 @@ int byte_group_type (
 }
 
 
+// Standard staff bitstring, used to produce a noteblock's staff without ledger lines or other variations.
+const unsigned short STD_STAFF_BITSTR = 0b0001010101010000;
+
+// Get the staff bitstring for a note. Other noteblock types should always use STD_STAFF_BITSTR.
+// Format: 1 represents a line row, 0 represents a space row.
+// Most significant bit (left) represents ROW_HI_B, least significant bit (right) represents ROW_TEXT.
+unsigned short staff_bitstr_for_note (
+    unsigned char byte1 // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
+    // Returns the staff bitstring for the note.
+){
+    unsigned short staffBitstr = STD_STAFF_BITSTR;
+    int noteheadRow = notehead_row (byte1);
+    if (noteheadRow <= ROW_LO_C && noteheadRow != ROW_TEXT) {
+        staffBitstr |= 0b0000000000000100;
+    }
+    else if (ROW_HI_A <= noteheadRow) {
+        staffBitstr |= 0b0100000000000000;
+    }
+    return staffBitstr;
+}
+
+
 // Get the height of a note's stem
 int stem_height (
     unsigned char byte1, // Bits 1-8 of note encoding. Bits 3-6 are relevant here.
@@ -502,26 +524,24 @@ inline void draw_row_error (
 // "Draw" functions to draw within existing noteblocks
 //*****************************************************
 
+
 // Draw the staff (spaces and lines) in a noteblock.
 void draw_staff (
-    char* pText,          // (Pointer to) a noteblock's 2D array of text, in which to draw the staff.
-    int   width,          // Width of noteblock. If less than 5, remaining column(s) will be filled with '\0's.
-    int   ledgerLineFlags // 1st bit: Whether bottom (low C) ledger line is needed.
-                          // 2nd bit: Whether top (high A) ledger line is needed.
+    char*          pText,      // (Pointer to) a noteblock's 2D array of text, in which to draw the staff.
+    int            width,      // Width of noteblock. If less than 5, remaining column(s) will be filled with '\0's.
+    unsigned short staffBitstr // Staff bitstring. For noteblock types other than note, always use STD_STAFF_BITSTR.
+                   // For notes, see staff_bitstr_for_note.
 ){
-    char cs[NOTEBLOCK_WIDTH]; // Space characters - ' ' for columns < width, '\0' for columns >= width
-    char cL[NOTEBLOCK_WIDTH]; // Line characters  - '-' for columns < width, '\0' for columns >= width
-    for (int i = 0; i < NOTEBLOCK_WIDTH; ++i) {
-        cs[i] = (i < width) ? ' ' : '\0';
-        cL[i] = (i < width) ? '-' : '\0';
+    // Create two strings: cs for drawing to space rows, cL for drawing to line rows
+    char cs[NOTEBLOCK_WIDTH] = {' ', ' ', ' ', ' ', ' '};
+    char cL[NOTEBLOCK_WIDTH] = {'-', '-', '-', '-', '-'};
+    for (int i = width; i < NOTEBLOCK_WIDTH; ++i) {
+        cs[i] = '\0';
+        cL[i] = '\0';
     }
-    unsigned short areRowsLines = // Bit string of length 16. 1 means line, 0 means space. High B (left) to Text (right).
-        (ledgerLineFlags == 0) ? 0b0001010101010000 :
-        (ledgerLineFlags == 1) ? 0b0001010101010100 :
-        (ledgerLineFlags == 2) ? 0b0101010101010000 :
-                                 0b0101010101010100;
+    // Draw rows
     for (int i = ROW_TEXT; i <= ROW_HI_B; ++i) {
-        if ((areRowsLines >> i) & 0b1) {
+        if ((staffBitstr >> i) & 0b1) {
             draw_row_raw (pText, i, cL[0], cL[1], cL[2], cL[3], cL[4]);
         }
         else {
@@ -823,10 +843,8 @@ struct noteblock* make_note (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    int noteheadRow = notehead_row (byte1);
-    int ledgerLineFlags = // 1st bit for low ledger line, 2nd bit for high ledger line
-        (noteheadRow <= ROW_LO_C && noteheadRow != ROW_TEXT) + ((ROW_HI_A <= noteheadRow) << 1);
-    draw_staff (pText, NOTEBLOCK_WIDTH, ledgerLineFlags);
+    unsigned short staffBitstr = staff_bitstr_for_note (byte1);
+    draw_staff (pText, NOTEBLOCK_WIDTH, staffBitstr);
 
     if (is_rest (byte1)) {
         draw_rest (pText, byte2);
@@ -854,7 +872,7 @@ struct noteblock* make_time_signature (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    draw_staff (pText, (topIs2Digits ? 4 : 3), 0);
+    draw_staff (pText, (topIs2Digits ? 4 : 3), STD_STAFF_BITSTR);
 
     if (topIs2Digits) {
         draw_row_raw (pText, ROW_HI_C, ' ', '1', '0' + (topNum % 10), ' ', '\0');
@@ -883,7 +901,7 @@ struct noteblock* make_key_signature (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    draw_staff (pText, NOTEBLOCK_WIDTH, 0);
+    draw_staff (pText, NOTEBLOCK_WIDTH, STD_STAFF_BITSTR);
 
     const char LAST_IDX = sizeof (KEY_SIGNATURE_ROWS) - 1;
     int dir = (bits01to16 & 0b100) ? -1 : 1; // Direction - loop backwards or forwards through KEY_SIGNATURE_ROWS
@@ -925,7 +943,7 @@ struct noteblock* make_barline (
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
     int width = ((byte >> 4) >= 6) ? NOTEBLOCK_WIDTH : BARLINE_NOTEBLOCK_WIDTHS[byte >> 4];
-    draw_staff (pText, width, 0);
+    draw_staff (pText, width, STD_STAFF_BITSTR);
 
     for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
         draw_barline_row (pText, row, byte);
