@@ -10,7 +10,7 @@
 #include <stdio.h>  // printf, fopen_s
 #include <stdlib.h> // malloc, atoi
 #include <stddef.h> // NULL
-#include <string.h> // strcmp
+#include <string.h> // strcmp, strcpy
 #include <time.h>   // time
 
 
@@ -1281,6 +1281,34 @@ char* noteblocks_to_string (
 // Main/IO
 //*********
 
+
+// Format a byte in format 0bXXXXXXXX
+void format_byte_0b (
+    char          byteStr[11], // Output param, char[11] that will be set with format 0bXXXXXXXX\0.
+    unsigned char byte         // Byte to format.
+){
+    strcpy_s (byteStr, 11, "0b00000000"); // strcpy_s also copies the '\0' to byteStr[10]
+    for (int i = 0; i < 8; ++i) {
+        if ((byte >> i) & 0b1) {
+            byteStr[9 - i] = '1';
+        }
+    }
+}
+
+
+// Format a byte from an array in format 0bXXXXXXXX. If index is out of bounds, use byte 0.
+void format_byte_from_index (
+    char                 byteStr[11], // Output param, char[11] that will be set with format 0bXXXXXXXX\0.
+    const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read.
+    int                  index        // Index in array of bytes.
+
+){
+    size_t bytesLen = strlen (pBytes);
+    unsigned char byte = (index < 0 || INT_MAX < bytesLen || (int)bytesLen <= index) ? 0 : pBytes[index];
+    format_byte_0b (byteStr, byte);
+}
+
+
 // Size in bytes of largest file we would try to read from.
 #define FILE_SIZE_MAX (99999)
 
@@ -1349,11 +1377,14 @@ void try_read_file (
     parseResult = parse_bytes_start_to_end (pBytes, &p1stNoteblock, &errIndex);
     if (parseResult != PARSE_RESULT_PARSED_ALL) {
         switch (parseResult) {
-            case PARSE_RESULT_INVALID_BYTE:
-                printf ("  Invalid value 0x%X at byte #%d\n", (unsigned char)pBytes[errIndex], errIndex);
+            case PARSE_RESULT_INVALID_BYTE: {
+                char byteStr[11];
+                format_byte_from_index (byteStr, pBytes, errIndex);
+                printf ("  Invalid byte %s at location #%d\n", byteStr, errIndex);
                 break;
+            }
             case PARSE_RESULT_UNEXPECTED_TERMINATOR:
-                printf ("  Invalid terminator (0b00000000) at byte #%d\n", errIndex);
+                printf ("  Invalid terminator byte 0b00000000 at location #%d\n", errIndex);
                 break;
             default:
                 printf ("  Internal error while parsing noteblocks\n");
@@ -1383,8 +1414,11 @@ char* str_example ()
     int errIndex;
     parseResult = parse_bytes_start_to_end (EXAMPLE_BYTES, &p1stNoteblock, &errIndex);
     if (parseResult != PARSE_RESULT_PARSED_ALL) {
-        printf ("  Internal error: parse result %d, error index %d, %s noteblock exists\n",
-            parseResult, errIndex, (p1stNoteblock == NULL) ? "no" : "a");
+        char byteStr[11];
+        format_byte_from_index (byteStr, EXAMPLE_BYTES, errIndex);
+        char* noteblockCountStr = (p1stNoteblock == NULL) ? "no" : "at least one";
+        printf ("  Internal error: parse result %d; error index %d; byte %s; %s noteblock exists\n",
+            parseResult, errIndex, byteStr, noteblockCountStr);
         free_noteblocks (p1stNoteblock);
         return NULL;
     }
