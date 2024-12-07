@@ -6,12 +6,16 @@
 //*****************************************************************************************************
 
 
-#include <limits.h> // UINT_MAX
+// External inclusions
+#include <limits.h> // INT_MAX, UINT_MAX
 #include <stdio.h>  // printf, fopen_s
 #include <stdlib.h> // malloc, atoi
 #include <stddef.h> // NULL
 #include <string.h> // strcmp, strcpy
 #include <time.h>   // time
+
+// Project inclusions
+#include "music2_data.h"
 
 
 
@@ -24,6 +28,8 @@ const char* STR_HELP =
 "  music.exe prints sheet music (drawn with ASCII characters) from an encoded file. Options:\n"
 "    music.exe -e                   Print file encoding information\n"
 "    music.exe -v                   Print example of visual style of output\n"
+"    music.exe -v <type>            Print examples of a specific byte group type -\n"
+"                                   type = clef, key, time, note, text, or barline\n"
 "    music.exe <filepath>           Read a file and print music on a continuous staff\n"
 "    music.exe <filepath> <width>   Read a file and print music with a maximum page width (min 5, max 255)\n"
 "    music.exe -p <count>           Test performance by repeatedly constructing the example from option -v\n";
@@ -86,67 +92,20 @@ const char* STR_ENCODING =
 "              single (0), double (1), left repeat (2), right repeat (3), both repeats (4), blank column (5)\n"
 "    Bit  8:   Unused\n"
 "  Dynamics text (3 bytes):\n"
-"    Applies to the previous noteblock. (Non-note noteblocks might need to have part of a crescendo/\n"
-"    decrescendo under them.) Invalid if this is the first byte.\n"
+"    Applies to the previous noteblock. (Non-note noteblocks might need dynamics text from part of a\n"
+"    crescendo or decrescendo under them.) Invalid if this is the first byte or there are two in a row.\n"
 "    Bits 1-4: Always 1000\n"
 "    Bits 5-8, 9-12, 13-16, 17-20, 21-24:\n"
-"      Each group of four bits represents one of these characters (encoded as 1-13, 0 invalid, 14-15 unused):\n"
-"      Null, space, '<', '>', '.', 'c', 'd', 'e', 'f', 'm', 'p', 'r', 's'\n"
+"      Each group of four bits represents one of these characters):\n"
+"        Invalid (0), null (1), space (2), '<' (3), '>' (4), '.' (5), 'c' (6), 'd' (7), 'e' (8),\n"
+"        'f' (9), 'm' (10), 'p' (11), 'r' (12), 's' (13), unused (14-15)\n"
 "      These 12 characters can make text such as \" ppp \", \"cresc\", \" decr\", \" mp<<\", \"<<f>>\", etc.\n"
+"      When the modified noteblock is x < 5 characters wide, use null (1) for characters x+1 to 5 of the\n"
+"      dynamics text.\n"
 "  Clef (1 byte):\n"
 "    Elsewhere in these descriptions, pitch names assume treble clef, but here you can draw a different clef.\n"
 "    Bits 1-6: Always 100000\n"
 "    Bits 7-8: Type - Treble (0), bass (1), percussion (2)\n";
-
-// Example song to illustrate visual style of output. Used by str_example function.
-const unsigned char EXAMPLE_BYTES[] = {
-    0b01010100, // Blank column
-    0b00100000, // Treble clef
-    0b00000111, 0b11000000, 0b00000111, 0b11110110, // E major (C# minor) key signature - C#, D#, F#, G#
-    0b00111010, // 4|4 time signature
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00101000, 0b10111010, 0b00100010, // Dynamics text " mp  "
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
-    0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
-    0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
-    0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00101000, 0b00110010, 0b00110011, // Dynamics text "  <<<"
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00010001, 0b00000110, // Low E, lone eighth
-    0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00100101, 0b01001001, // High C, beamed sixteenth (left and right), staccato
-    0b00111000, 0b10010010, 0b00010010, // Dynamics text "< f  "
-    0b00100101, 0b01101101, // High C, beamed sixteenth (left only), tied to next, staccato
-    0b00100100, // Left repeat barline :|
-    0b00100101, 0b00100100, // High C, half, tied to nothing
-    0b00000000  // Terminator
-};
-
-// The following width splits the string representation of the above bytes neatly into two staves.
-#define EXAMPLE_WIDTH (85)
 
 
 
@@ -755,7 +714,7 @@ void draw_flags (
     char* pText,       // (Pointer to) a noteblock's 2D array text, in which to draw.
     int   countFlags,  // Number of flags to draw, 0-2.
     int   stemTopRow,  // Row that the top of the stem is on. If there are two flags, this function will
-                       // draw one on this row and the other on the adjacent row closer to the notehead.
+          // draw one on this row and the other on the adjacent row closer to the notehead.
     int   orientation  // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
 ){
     if (countFlags >= 1) {
@@ -771,12 +730,12 @@ void draw_flags (
 
 // Draw a note's beams, if it has any
 void draw_beams (
-    char* pText,       // (Pointer to) a noteblock's 2D array text, in which to draw.
+    char* pText,           // (Pointer to) a noteblock's 2D array text, in which to draw.
     int   countLeftBeams,  // Number of beams to draw on the left of the stem, 0-2.
     int   countRightBeams, // Number of beams to draw on the right of the stem, 0-2.
-    int   stemTopRow,  // Row that the top of the stem is on. If there are two beams, this function will
-                       // draw one on this row and the other on the adjacent row closer to the notehead.
-    int   orientation  // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
+    int   stemTopRow,      // Row that the top of the stem is on. If there are two beams, this function will
+          // draw one on this row and the other on the adjacent row closer to the notehead.
+    int   orientation      // Note orientation. +1 means the stem is above the notehead. -1 means it's below.
 ){
     if (countLeftBeams == 0 && countRightBeams == 0) {
         return; // If, for example, the user accidentally has a non-beamed note followed by a left-beamed note
@@ -822,9 +781,9 @@ void draw_beams (
 
 // Draws a note's stem, if it has one, and flag(s) or beam(s), if it has them.
 void draw_stem_flags_beams (
-    char*         pText,         // (Pointer to) a noteblock's 2D array text, in which to draw.
-    unsigned char byte1,         // Bits 1-8 of note encoding.
-    unsigned char byte2,         // Bits 9-16 of note encoding.
+    char*         pText,    // (Pointer to) a noteblock's 2D array text, in which to draw.
+    unsigned char byte1,    // Bits 1-8 of note encoding.
+    unsigned char byte2,    // Bits 9-16 of note encoding.
     unsigned int  parseInfo // How many beams (0-2) this note should have on the left, if beamed.
 ){
     int stemHeight = stem_height (byte1, byte2);
@@ -1059,9 +1018,10 @@ int parse_byte_group (
     const unsigned char* pBytes,      // Pointer to array of bytes (0-terminated) from which to read.
     int*                 pIndex,      // Pointer to index in array of bytes. Calling this function usually increases it.
     struct noteblock**   ppNoteblock, // Pointer to pointer to current noteblock (or pointer to NULL if none). If this
-        // function creates a new noteblock, *ppNoteblock will point to it afterwards. If a terminator is parsed,
-        // *ppNoteblock will be set to NULL.
+                         // function creates a new noteblock, *ppNoteblock will point to it afterwards. If a terminator
+                         //  is parsed, *ppNoteblock will be set to NULL.
     unsigned int*        pParseInfo   // Pointer to info stored between calls to this function - see update_parse_info.
+                         // The first time you call this function, initialize *pParseInfo = 0.
     // Returns one of the PARSE_RESULTs.
 ){
     if (ppNoteblock == NULL) { return PARSE_RESULT_INTERNAL_ERROR; } // *ppNoteblock can be NULL, but ppNoteblock can't
@@ -1185,12 +1145,12 @@ int parse_bytes_start_to_end (
 void append_staff_row_initial (
     struct noteblock*  pStaffHead,      // Pointer to first noteblock in current staff.
     struct noteblock** ppStaffHeadNext, // *ppStaffHeadNext will be set to pointer to first noteblock in next staff,
-                                        // or NULL if currently in last staff.
+                       // or NULL if currently in last staff.
     int                row,             // Row number (0 to 15) in staff. Should be the top row, ROW_HI_B.
     char*              str,             // Partially populated character array, in which to append.
     unsigned int*      pIdxInStr,       // Pointer to next index in str. Increased when function called.
     int                maxStaffWidth    // Max number of characters in the staff's string representation (not including
-                                        // newline).
+                       // newline).
 ){
     unsigned int limitIdxInStr = *pIdxInStr + maxStaffWidth;
     unsigned int unsafeIdxInStr = limitIdxInStr - NOTEBLOCK_WIDTH;
@@ -1219,7 +1179,7 @@ void append_staff_row_initial (
 void append_staff_row_subsequent (
     struct noteblock* pStaffHead,     // Pointer to first noteblock in current staff.
     struct noteblock* pStaffHeadNext, // Pointer to first noteblock in next staff, or NULL if currently in last staff.
-                                      // Call append_staff_row_initial to find this.
+                      // Call append_staff_row_initial to find this.
     int               row,            // Row number (0 to 15) in staff.
     char*             str,            // Partially populated character array, in which to append.
     unsigned int*     pIdxInStr       // Pointer to next index in str. Increased when function called.
@@ -1405,17 +1365,34 @@ void try_read_file (
 }
 
 
-// Returns example string printed when user uses cmd line option -v.
-// If an error occurs, prints error information and returns NULL.
-char* str_example ()
-{
-    int parseResult;
+// Returns an example string to print when user uses cmd line option -v.
+// If input is invalid or an error occurs, prints error information and returns NULL.
+char* str_example (
+    char* arg // User-entered argument after -v, or NULL if none, which results in the general example song.
+    // Returns example string to print.
+){
+    // Determine which example string to display
+    const char* exampleBytes =
+        (arg == NULL || strcmp(arg, "") == 0) ? EXAMPLE_BYTES :
+        (strcmp (arg, "clef") == 0) ? DTL_BYTES_CLEF :
+        (strcmp (arg, "key") == 0) ? DTL_BYTES_KEY_CHANGE :
+        (strcmp (arg, "time") == 0) ? DTL_BYTES_TIME_CHANGE :
+        (strcmp (arg, "note") == 0) ? DTL_BYTES_NOTE :
+        (strcmp (arg, "text") == 0) ? DTL_BYTES_TEXT :
+        (strcmp (arg, "barline") == 0) ? DTL_BYTES_BARLINE :
+        NULL;
+    if (exampleBytes == NULL) {
+        printf ("Invalid argument \"%s\"\n", arg);
+        return NULL;
+    }
+
+    // Process example bytes to a list of noteblocks
     struct noteblock* p1stNoteblock;
     int errIndex;
-    parseResult = parse_bytes_start_to_end (EXAMPLE_BYTES, &p1stNoteblock, &errIndex);
+    int parseResult = parse_bytes_start_to_end (exampleBytes, &p1stNoteblock, &errIndex);
     if (parseResult != PARSE_RESULT_PARSED_ALL) {
         char byteStr[11];
-        format_byte_from_index (byteStr, EXAMPLE_BYTES, errIndex);
+        format_byte_from_index (byteStr, exampleBytes, errIndex);
         char* noteblockCountStr = (p1stNoteblock == NULL) ? "no" : "at least one";
         printf ("  Internal error: parse result %d; error index %d; byte %s; %s noteblock exists\n",
             parseResult, errIndex, byteStr, noteblockCountStr);
@@ -1423,7 +1400,9 @@ char* str_example ()
         return NULL;
     }
 
-    char* str = noteblocks_to_string (p1stNoteblock, EXAMPLE_WIDTH);
+    // Process list of noteblocks to a single string
+    int exampleWidth = (exampleBytes == EXAMPLE_BYTES) ? EXAMPLE_WIDTH : DTL_WIDTH;
+    char* str = noteblocks_to_string (p1stNoteblock, exampleWidth);
     free_noteblocks (p1stNoteblock);
     return str;
 }
@@ -1454,7 +1433,7 @@ void test_performance (
     time (&time0);
     while (1) {
         // Meat of loop
-        char* s = str_example ();
+        char* s = str_example (NULL);
         free (s);
         // Rest of loop
         --i;
@@ -1482,15 +1461,16 @@ int main (
     int   argc,  // Count of command-line argument strings, including program name
     char* argv[] // Array of command-line argument strings (first actual argument is argv[1])
 ){
-    if (argc == 2 && strcmp (argv[1], "-e") == 0) {
-        printf (STR_ENCODING);
-    }
-    else if (argc == 2 && strcmp (argv[1], "-v") == 0) {
-        char* strExample = str_example ();
+    if ((argc == 2 || argc == 3) && strcmp (argv[1], "-v") == 0) {
+        char* exampleArg = (argc == 2) ? NULL : argv[2];
+        char* strExample = str_example (exampleArg);
         if (strExample != NULL) {
             printf (strExample);
             free (strExample);
         }
+    }
+    else if (argc == 2 && strcmp (argv[1], "-e") == 0) {
+        printf (STR_ENCODING);
     }
     else if (argc == 2 && strcmp (argv[1], "-p") == 0) {
         printf ("  Count argument required for option -p\n");
