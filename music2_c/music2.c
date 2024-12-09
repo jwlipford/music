@@ -32,7 +32,8 @@ const char* STR_HELP =
 "                                   type = clef, key, time, note, text, or barline\n"
 "    music.exe <filepath>           Read a file and print music on a continuous staff\n"
 "    music.exe <filepath> <width>   Read a file and print music with a maximum page width (min 5, max 255)\n"
-"    music.exe -p <count>           Test performance by repeatedly constructing the example from option -v\n";
+"    music.exe -p <count>           Test performance by repeatedly constructing the example from option -v\n"
+"    music.exe -p <count> <type>    Test performance by repeatedly constructing the example from option -v <type>\n";
 
 // File encoding
 const char* STR_ENCODING =
@@ -1365,34 +1366,48 @@ void try_read_file (
 }
 
 
-// Returns an example string to print when user uses cmd line option -v.
+// Given the argument the user entered after option -v, get the array of example bytes and the staff width to use.
+int get_example_bytes_width (
+    char*           typeArg,        // User-entered argument after -v, or NULL if none, which results in the general
+                    // example song.
+    unsigned char** ppExampleBytes, // *ppExampleBytes will be set to the array of encoded bytes to parse,
+                    // or NULL if arg is invalid.
+    int*            pExampleWidth   // *pExampleWidth will be set to the staff width to use, or 0 if arg is invalid.
+    // Returns 1 if argument is valid (and params passed correctly), otherwise 0.
+){
+    if (ppExampleBytes != NULL) *ppExampleBytes = NULL;
+    if (pExampleWidth != NULL) *pExampleWidth = 0;
+    if (ppExampleBytes == NULL || pExampleWidth == NULL) return 0;
+
+    *ppExampleBytes =
+        (typeArg == NULL || strcmp(typeArg, "") == 0) ? EXAMPLE_BYTES :
+        (strcmp (typeArg, "clef") == 0) ? DTL_BYTES_CLEF :
+        (strcmp (typeArg, "key") == 0) ? DTL_BYTES_KEY_CHANGE :
+        (strcmp (typeArg, "time") == 0) ? DTL_BYTES_TIME_CHANGE :
+        (strcmp (typeArg, "note") == 0) ? DTL_BYTES_NOTE :
+        (strcmp (typeArg, "text") == 0) ? DTL_BYTES_TEXT :
+        (strcmp (typeArg, "barline") == 0) ? DTL_BYTES_BARLINE :
+        NULL;
+    if (*ppExampleBytes == NULL) return 0;
+    *pExampleWidth = (*ppExampleBytes == EXAMPLE_BYTES) ? EXAMPLE_WIDTH : DTL_WIDTH;
+    return 1;
+}
+
+
+// Get an example string to print when user uses cmd line option -v.
 // If input is invalid or an error occurs, prints error information and returns NULL.
 char* str_example (
-    char* arg // User-entered argument after -v, or NULL if none, which results in the general example song.
+    unsigned char* pExampleBytes, // Pointer to array of encoded bytes to parse.
+    int            exampleWidth   // Max width of a staff in characters.
     // Returns example string to print.
 ){
-    // Determine which example string to display
-    const char* exampleBytes =
-        (arg == NULL || strcmp(arg, "") == 0) ? EXAMPLE_BYTES :
-        (strcmp (arg, "clef") == 0) ? DTL_BYTES_CLEF :
-        (strcmp (arg, "key") == 0) ? DTL_BYTES_KEY_CHANGE :
-        (strcmp (arg, "time") == 0) ? DTL_BYTES_TIME_CHANGE :
-        (strcmp (arg, "note") == 0) ? DTL_BYTES_NOTE :
-        (strcmp (arg, "text") == 0) ? DTL_BYTES_TEXT :
-        (strcmp (arg, "barline") == 0) ? DTL_BYTES_BARLINE :
-        NULL;
-    if (exampleBytes == NULL) {
-        printf ("Invalid argument \"%s\"\n", arg);
-        return NULL;
-    }
-
     // Process example bytes to a list of noteblocks
-    struct noteblock* p1stNoteblock;
-    int errIndex;
-    int parseResult = parse_bytes_start_to_end (exampleBytes, &p1stNoteblock, &errIndex);
+    struct noteblock* p1stNoteblock = NULL;
+    int errIndex = 0;
+    int parseResult = parse_bytes_start_to_end (pExampleBytes, &p1stNoteblock, &errIndex);
     if (parseResult != PARSE_RESULT_PARSED_ALL) {
         char byteStr[11];
-        format_byte_from_index (byteStr, exampleBytes, errIndex);
+        format_byte_from_index (byteStr, pExampleBytes, errIndex);
         char* noteblockCountStr = (p1stNoteblock == NULL) ? "no" : "at least one";
         printf ("  Internal error: parse result %d; error index %d; byte %s; %s noteblock exists\n",
             parseResult, errIndex, byteStr, noteblockCountStr);
@@ -1401,17 +1416,36 @@ char* str_example (
     }
 
     // Process list of noteblocks to a single string
-    int exampleWidth = (exampleBytes == EXAMPLE_BYTES) ? EXAMPLE_WIDTH : DTL_WIDTH;
     char* str = noteblocks_to_string (p1stNoteblock, exampleWidth);
     free_noteblocks (p1stNoteblock);
     return str;
 }
 
 
+// Print an example string when user chooses option -v
+void show_example (
+    char* typeArg // User-entered argument after -v, or NULL if none, which results in the general example song.
+){
+    unsigned char* pExampleBytes = NULL;
+    int exampleWidth = 0;
+    int isArgValid = get_example_bytes_width (typeArg, &pExampleBytes, &exampleWidth);
+    if (!isArgValid) {
+        printf ("  Invalid argument \"%s\"\n", typeArg);
+        return;
+    }
+    char* strExample = str_example (pExampleBytes, exampleWidth);
+    if (strExample == NULL) return;
+    printf (strExample);
+    free (strExample);
+}
+
+
 // Test performance by constructing str_example count times
 void test_performance (
-    char* countStr // String representing how many times to call str_example. Should be >= 10.
+    char* countStr, // String representing how many times to call str_example. Should be >= 10.
+    char* typeArg   // User-entered argument after -v, or NULL if none, which results in the general example song.
 ){
+    // Parse countStr
     int countInt = atoi (countStr); // Returns 0 if not parsable
     if (countInt < 10) {
         if (countInt == 0) {
@@ -1423,6 +1457,20 @@ void test_performance (
         return;
     }
 
+    // Process typeArg
+    unsigned char* pExampleBytes = NULL;
+    int exampleWidth = 0;
+    int isArgValid = get_example_bytes_width (typeArg, &pExampleBytes, &exampleWidth);
+    if (!isArgValid) {
+        printf ("  Invalid argument \"%s\"\n", typeArg);
+        return;
+    }
+
+    // Try once to build the string, make sure there's no error.
+    char* s = str_example (pExampleBytes, exampleWidth);
+    if (s == NULL) return;
+    free (s);
+
     // The following is over-optimized for the speed of the loop.
     // In particular, the loop does direct comparison to 0 with no modulus involved.
     int tenthOfCount = countInt / 10;
@@ -1433,7 +1481,7 @@ void test_performance (
     time (&time0);
     while (1) {
         // Meat of loop
-        char* s = str_example (NULL);
+        s = str_example (pExampleBytes, exampleWidth);
         free (s);
         // Rest of loop
         --i;
@@ -1451,8 +1499,11 @@ void test_performance (
             }
         }
     }
+
+    // Output
     time (&time1);
-    printf ("\n  Example output constructed %s times in <%d seconds\n", countStr, ((int)time1 - (int)time0 + 1));
+    int dur = (int)(time1 - time0);
+    printf ("\n  Example output constructed %s times in <%d seconds\n", countStr, dur);
 }
 
 
@@ -1462,12 +1513,8 @@ int main (
     char* argv[] // Array of command-line argument strings (first actual argument is argv[1])
 ){
     if ((argc == 2 || argc == 3) && strcmp (argv[1], "-v") == 0) {
-        char* exampleArg = (argc == 2) ? NULL : argv[2];
-        char* strExample = str_example (exampleArg);
-        if (strExample != NULL) {
-            printf (strExample);
-            free (strExample);
-        }
+        char* typeArg = (argc == 2) ? NULL : argv[2];
+        show_example (typeArg);
     }
     else if (argc == 2 && strcmp (argv[1], "-e") == 0) {
         printf (STR_ENCODING);
@@ -1481,8 +1528,9 @@ int main (
     else if (argc == 2) {
         try_read_file (argv[1], NULL);
     }
-    else if (argc == 3 && strcmp (argv[1], "-p") == 0) {
-        test_performance (argv[2]);
+    else if ((argc == 3 || argc == 4) && strcmp (argv[1], "-p") == 0) {
+        char* typeArg = (argc == 3) ? NULL : argv[3];
+        test_performance (argv[2], typeArg);
     }
     else if (argc == 3) {
         try_read_file (argv[1], argv[2]);
