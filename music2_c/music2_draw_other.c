@@ -43,44 +43,151 @@ void draw_dynamics_text_row (
 }
 
 
-// Draw one row of a barline in a noteblock
-void draw_barline_row (
-    char*         pText, // (Pointer to) a noteblock's 2D array text
-    int           row,   // Row number (0-15)
-    unsigned char byte   // Bits 1-8 of barline encoding. Bits 5-7 are relevant here.
+// Draw a single barline, wide
+void draw_barline_single_wide (
+    char* pText // (Pointer to) a noteblock's 2D array text
 ){
-    switch (byte) {
-        case 0b00000100: // Single barline
-            if (row_is_edge (row)) draw_row (pText, row, 1, '+', 1, '\0', '\0');
-            else                   draw_row (pText, row, 1, '|', 1, '\0', '\0');
-            break;
-        case 0b00010100: // Double barline
-            if (row_is_edge (row)) draw_row (pText, row, 1, '+', '+', '\0', '\0');
-            else                   draw_row (pText, row, 1, '|', '|', '\0', '\0');
-            break;
-        case 0b00100100: // Double barline with left repeat
-            if (row_is_beside_mid_B (row)) draw_row (pText, row, 1, '0', '|', '|', 1);
-            else if (row_is_edge (row))    draw_row (pText, row, 1, 1, '+', '+', 1);
-            else                           draw_row (pText, row, 1, 1, '|', '|', 1);
-            break;
-        case 0b00110100: // Double barline with right repeat
-            if (row_is_beside_mid_B (row)) draw_row (pText, row, 1, '|', '|', '0', 1);
-            else if (row_is_edge (row))    draw_row (pText, row, 1, '+', '+', 1, 1);
-            else                           draw_row (pText, row, 1, '|', '|', 1, 1);
-            break;
-        case 0b01000100: // Double barline with left and right repeats
-            if (row_is_beside_mid_B (row)) draw_row (pText, row, '0', '|', '|', '0', '\0');
-            else if (row_is_edge (row))    draw_row (pText, row, 1, '+', '+', 1, '\0');
-            else                           draw_row (pText, row, 1, '|', '|', 1, '\0');
-            break;
-        case 0b01010100: // Blank column (not actually a barline)
-            draw_row (pText, row, 1, '\0', '\0', '\0', '\0');
-            break;
-        default: // Invalid
-            draw_row_error (pText, row);
-            break;
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_edge (row)) draw_row (pText, row, 1, '+', 1, '\0', '\0');
+        else                   draw_row (pText, row, 1, '|', 1, '\0', '\0');
     }
 }
+
+// Draw a double barline, wide
+void draw_barline_double_wide (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_edge (row)) draw_row (pText, row, 1, '+', '+', '\0', '\0');
+        else                   draw_row (pText, row, 1, '|', '|', '\0', '\0');
+    }
+}
+
+// Draw a double barline with left repeat, wide
+void draw_barline_left_repeat_wide (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_beside_mid_B (row)) draw_row (pText, row, 1, '0', '|', '|', 1);
+        else if (row_is_edge (row))    draw_row (pText, row, 1,   1, '+', '+', 1);
+        else                           draw_row (pText, row, 1,   1, '|', '|', 1);
+    }
+}
+
+// Draw a double barline with right repeat, wide
+void draw_barline_right_repeat_wide (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_beside_mid_B (row)) draw_row (pText, row, 1, '|', '|', '0', 1);
+        else if (row_is_edge (row))    draw_row (pText, row, 1, '+', '+',   1, 1);
+        else                           draw_row (pText, row, 1, '|', '|',   1, 1);
+    }
+}
+
+// Draw a double barline with left and right repeats, slim
+void draw_barline_left_right_repeat_slim (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_beside_mid_B (row)) draw_row (pText, row, '0', '|', '|', '0', '\0');
+        else if (row_is_edge (row))    draw_row (pText, row,   1, '+', '+',   1, '\0');
+        else                           draw_row (pText, row,   1, '|', '|',   1, '\0');
+    }
+}
+
+// Draw a single blank column (not actually a barline)
+void draw_barline_blank_column (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        draw_row (pText, row, 1, '\0', '\0', '\0', '\0');
+    }
+}
+
+// Draw a single barline, slim
+void draw_barline_single_slim (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_edge (row)) draw_row (pText, row, '+', '\0', '\0', '\0', '\0');
+        else                   draw_row (pText, row, '|', '\0', '\0', '\0', '\0');
+    }
+}
+
+// Draw a double barline, slim
+void draw_barline_double_slim (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_edge (row)) draw_row (pText, row, '+', '+', '\0', '\0', '\0');
+        else                   draw_row (pText, row, '|', '|', '\0', '\0', '\0');
+    }
+}
+
+// Draw a double barline with left repeat, slim
+void draw_barline_left_repeat_slim (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_beside_mid_B (row)) draw_row (pText, row, '0', '|', '|', '\0', '\0');
+        else if (row_is_edge (row))    draw_row (pText, row,   1, '+', '+', '\0', '\0');
+        else                           draw_row (pText, row,   1, '|', '|', '\0', '\0');
+    }
+}
+
+// Draw a double barline with right repeat, slim
+void draw_barline_right_repeat_slim (
+    char* pText // (Pointer to) a noteblock's 2D array text
+){
+    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
+        if (row_is_beside_mid_B (row)) draw_row (pText, row, '|', '|', '0', '\0', '\0');
+        else if (row_is_edge (row))    draw_row (pText, row, '+', '+',   1, '\0', '\0');
+        else                           draw_row (pText, row, '|', '|',   1, '\0', '\0');
+    }
+}
+
+// Draw a barline in a noteblock
+void draw_barline (
+    char* pText,      // (Pointer to) a noteblock's 2D array text
+    int   barlineType // Barline type from bits 5-8 of byte
+){
+    switch (barlineType) {
+        case 0b0000:
+            draw_barline_single_wide (pText);
+            return;
+        case 0b0001:
+            draw_barline_double_wide (pText);
+            return;
+        case 0b0010:
+            draw_barline_left_repeat_wide (pText);
+            return;
+        case 0b0011:
+            draw_barline_right_repeat_wide (pText);
+            return;
+        case 0b0100:
+            draw_barline_left_right_repeat_slim (pText);
+            return;
+        case 0b0101:
+            draw_barline_blank_column (pText);
+            return;
+        case 0b0110:
+            draw_barline_single_slim (pText);
+            return;
+        case 0b0111:
+            draw_barline_double_slim (pText);
+            return;
+        case 0b1000:
+            draw_barline_left_repeat_slim (pText);
+            return;
+        case 0b1001:
+            draw_barline_right_repeat_slim (pText);
+            return;
+        default: // Invalid
+            draw_row_error (pText, ROW_MD_B);
+            return;
+     }
+ }
 
 
 // Make a time signature noteblock
@@ -155,7 +262,7 @@ struct noteblock* make_key_signature (
 
 
 // Width of each type of barline (starting with single barline of width 3)
-const unsigned char BARLINE_NOTEBLOCK_WIDTHS[6] = { 3, 4, 5, 5, 4, 1 };
+const unsigned char BARLINE_NOTEBLOCK_WIDTHS[10] = { 3, 4, 5, 5, 4, 1, 1, 2, 3, 3 };
 
 // Make a barline noteblock
 struct noteblock* make_barline (
@@ -166,12 +273,12 @@ struct noteblock* make_barline (
     if (pNoteblock == NULL) { return NULL; }
     pNoteblock->pNext = NULL;
     char* pText = get_ptr_to_text (pNoteblock);
-    int width = ((byte >> 4) >= 6) ? NOTEBLOCK_WIDTH : BARLINE_NOTEBLOCK_WIDTHS[byte >> 4];
+    int barlineType = byte >> 4;
+    int width = (barlineType >= sizeof (BARLINE_NOTEBLOCK_WIDTHS)) ?
+        NOTEBLOCK_WIDTH : BARLINE_NOTEBLOCK_WIDTHS[barlineType];
     draw_staff (pText, width, STD_STAFF_BITSTR);
 
-    for (int row = ROW_LO_E; row <= ROW_HI_F; ++row) {
-        draw_barline_row (pText, row, byte);
-    }
+    draw_barline (pText, barlineType);
 
     return pNoteblock;
 }

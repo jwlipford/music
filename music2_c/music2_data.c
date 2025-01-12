@@ -53,7 +53,7 @@ const unsigned char EXAMPLE_BYTES[] = {
     0b00100101, 0b01001001, // High C, beamed sixteenth (left and right), staccato
     0b00111000, 0b10010010, 0b00010010, // Dynamics text "< f  "
     0b00100101, 0b01101101, // High C, beamed sixteenth (left only), tied to next, staccato
-    0b00100100, // Left repeat barline :|
+    0b10000100, // Left repeat barline :| slim
     0b00100101, 0b00100100, // High C, half, tied to nothing
     0           // Terminator
 };
@@ -170,13 +170,28 @@ const unsigned char DTL_BYTES_TEXT[] = {
     0           // Terminator
 };
 
-// Detailed example of barlines. Displays all six barlines.
+// Detailed example of barlines. Displays all of them.
 const unsigned char DTL_BYTES_BARLINE[] = {
-    0b00000100, // Single
-    0b00010100, // Double
-    0b00100100, // Left repeat
-    0b00110100, // Right repeat
-    0b01000100, // Both repeats
+    0b00100000, // Treble clef
+    0b00000100, // Single wide
+    0b00100000, // Treble clef
+    0b01100100, // Single slim
+    0b00100000, // Treble clef
+    0b00010100, // Double wide
+    0b00100000, // Treble clef
+    0b01110100, // Double slim
+    0b00100000, // Treble clef
+    0b00100100, // Left repeat wide
+    0b00100000, // Treble clef
+    0b10000100, // Left repeat slim
+    0b00100000, // Treble clef
+    0b00110100, // Right repeat wide
+    0b00100000, // Treble clef
+    0b10010100, // Right repeat slim
+    0b00100000, // Treble clef
+    0b01000100, // Both repeats slim
+    0b00100000, // Treble clef
     0b01010100, // Blank column
+    0b00100000, // Treble clef
     0           // Terminator
 };
