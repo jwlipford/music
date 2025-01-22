@@ -325,13 +325,30 @@ char* noteblocks_to_string (
 
 
 
-//*********
-// Main IO
-//*********
+//***************************
+// Byte to string formatting
+//***************************
 
-// Format a byte in format 0bXXXXXXXX
+// Format a byte in format XXXX XXXX (no trailing char 0).
+void format_byte_XXXX_XXXX (
+    char          byteStr[9], // Output param, char[9] that will be set with format XXXX XXXX.
+    unsigned char byte        // Byte to format.
+){
+    byteStr[0] = '0' + ((byte & 0b00000001) > 0);
+    byteStr[1] = '0' + ((byte & 0b00000010) > 0);
+    byteStr[2] = '0' + ((byte & 0b00000100) > 0);
+    byteStr[3] = '0' + ((byte & 0b00001000) > 0);
+    byteStr[4] = ' ';
+    byteStr[5] = '0' + ((byte & 0b00010000) > 0);
+    byteStr[6] = '0' + ((byte & 0b00100000) > 0);
+    byteStr[7] = '0' + ((byte & 0b01000000) > 0);
+    byteStr[8] = '0' + ((byte & 0b10000000) > 0);
+}
+
+
+// Format a byte in format 0bXXXXXXXX (with trailing char 0).
 void format_byte_0b (
-    char          byteStr[11], // Output param, char[11] that will be set with format 0bXXXXXXXX\0.
+    char          byteStr[11], // Output param, char[11] that will be set with format 0bXXXXXXXX.
     unsigned char byte         // Byte to format.
 ){
     strcpy_s (byteStr, 11, "0b00000000"); // strcpy_s also copies the '\0' to byteStr[10]
@@ -355,6 +372,11 @@ void format_byte_from_index (
     format_byte_0b (byteStr, byte);
 }
 
+
+
+//*********
+// Main IO
+//*********
 
 // Size in bytes of largest file we would try to read from.
 #define FILE_SIZE_MAX (99999)
@@ -508,9 +530,54 @@ char* str_example (
 }
 
 
+// Given the example bytes used to print an example string for cmd line option -vb,
+// format the raw bytes in binary with eight bytes per line, like this:
+// (XXXX XXXX, ..., XXXX XXXX,\n
+//             ...            \n
+//  XXXX XXXX, ..., XXXX XXXX)\n\0
+char* str_format_example_bytes (
+    unsigned char* pExampleBytes // Pointer to array of encoded bytes.
+    // Returns formatted string representing the bytes.
+){
+    // Allocate a string with max length we might need. Each line has (bytes * 11 + 2) chars.
+    size_t countBytes = strlen (pExampleBytes) + 1; // +1 for ending byte 0
+    if (countBytes <= 1) return NULL;
+    size_t countLines = (countBytes / 8) + (countBytes % 8 > 0);
+    size_t countChars = (countBytes * 11) + countLines + 1; // +countLines for '\n's, +1 for char 0
+    char* str = malloc (countChars);
+    if (str == NULL) return NULL;
+
+    // Format bytes into string
+    size_t strIndex = 0;
+    size_t byteIndex = 0;
+    while (byteIndex < countBytes) {
+        // Safety check, shouldn't happen.
+        if (strIndex + 12 >= countChars) break;
+        // Add one byte to line
+        unsigned char byte = pExampleBytes[byteIndex];
+        ++byteIndex;
+        str[strIndex] = ' '; ++strIndex;
+        char* pByteStr = &(str[strIndex]);
+        format_byte_XXXX_XXXX (pByteStr, byte);
+        strIndex += 9;
+        str[strIndex] = ',';  ++strIndex;
+        // If at end of line, add \n
+        if ((byteIndex % 8 == 0) || (byteIndex >= countBytes)) {
+            str[strIndex] = '\n'; ++strIndex;
+        }
+    }
+    str[0] = '('; // Overwrite the first space
+    str[strIndex - 2] = ')'; // Overwrite the most recent comma
+    // Keep str[strIndex - 1] == '\n'
+    str[strIndex] = '\0'; ++strIndex; // Append '\0'
+    return str;
+}
+
+
 // Print an example string when user chooses option -v
 void show_example (
-    char* typeArg // User-entered argument after -v, or NULL if none, which results in the general example song.
+    char* typeArg,  // User-entered argument after -v, or NULL if none, which results in the general example song.
+    int   showBytes // Whether to show the bytes under the music notation.
 ){
     unsigned char* pExampleBytes = NULL;
     int exampleWidth = 0;
@@ -521,8 +588,14 @@ void show_example (
     }
     char* strExample = str_example (pExampleBytes, exampleWidth);
     if (strExample == NULL) return;
+    char* strBytes = showBytes ? str_format_example_bytes (pExampleBytes) : NULL;
+    if (showBytes && strBytes == NULL) return;
     printf (strExample);
     free (strExample);
+    if (strBytes != NULL) {
+        printf ("Encoding:\n%s\n\n", strBytes);
+        free (strBytes);
+    }
 }
 
 

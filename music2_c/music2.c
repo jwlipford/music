@@ -25,8 +25,9 @@ const char* STR_HELP =
 "  music.exe prints sheet music (drawn with ASCII characters) from an encoded file. Options:\n"
 "    music.exe -e                   Print file encoding information\n"
 "    music.exe -v                   Print example of visual style of output\n"
-"    music.exe -v <type>            Print examples of a specific byte group type -\n"
-"                                   type = clef, key, time, note, text, or barline\n"
+"    music.exe -vb                  Print example of visual style of output along with source bytes\n"
+"    music.exe -v[b] <type>         Print example of a specific byte group type\n"
+"                                   where type = clef, key, time, note, text, or barline\n"
 "    music.exe <filepath>           Read a file and print music on a continuous staff\n"
 "    music.exe <filepath> <width>   Read a file and print music with a maximum page width (min 5, max 255)\n"
 "    music.exe -p <count>           Test performance by repeatedly constructing the example from option -v\n"
@@ -116,9 +117,10 @@ int main (
     int   argc,  // Count of command-line argument strings, including program name
     char* argv[] // Array of command-line argument strings (first actual argument is argv[1])
 ){
-    if ((argc == 2 || argc == 3) && strcmp (argv[1], "-v") == 0) {
+    if ((argc == 2 || argc == 3) && (strcmp (argv[1], "-v") == 0 || strcmp (argv[1], "-vb") == 0)) {
         char* typeArg = (argc == 2) ? NULL : argv[2];
-        show_example (typeArg);
+        int showBytes = (strcmp (argv[1], "-vb") == 0);
+        show_example (typeArg, showBytes);
     }
     else if (argc == 2 && strcmp (argv[1], "-e") == 0) {
         printf (STR_ENCODING);
