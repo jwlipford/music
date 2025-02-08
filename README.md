@@ -1,7 +1,7 @@
 # music
- music.exe prints sheet music (drawn with ASCII characters) from an encoded file.
+music.exe prints ASCII art of music notation from an encoded file.
 
-I was inspired by three desires:
+I was motivated by three desires:
 
 * To see how much information density I could squeeze out of a few bytes
   * I never needed more than four bytes per 5-by-16-character block of text. I was able to squeeze the encoding of one note into two bytes.
@@ -16,7 +16,8 @@ I was inspired by three desires:
 
 * I wrote an F# version. It was quite fun. However, that version is not at all optimized and runs about a hundred times slower than the C# version. On my machine, `music_fs.exe -p 5432` runs in 33 seconds.
 * I got most of the way through a Fortran version before I lost interest. That version's performance compares to the C version's. However, given the choice, I would much rather code in C; I see the reason for C's higher popularity.
-* I wrote a MUMPS version. It was fun. Because MUMPS is such a different language from the others, there are interesting differences in the data structures. What in C and C# was a linked list of two-dimensional arrays is in MUMPS a three-level tree of strings.
+* I wrote a MUMPS version. (MUMPS is one of the main languages I use professionally.) It was fun. Because MUMPS is such a different language from the others, there are interesting differences in the data structures. What in C and C# was a linked list of two-dimensional arrays is in MUMPS a three-level tree of strings.
+* I wrote an enhanced version called music2 in C. Most notably, I improved the options for beamed notes. I didn't translate this version to C#, F#, or MUMPS. The information below is about the original, translated version.
 
 #### Example of visual style
 
