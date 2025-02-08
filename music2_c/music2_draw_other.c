@@ -186,8 +186,8 @@ void draw_barline (
         default: // Invalid
             draw_row_error (pText, ROW_MD_B);
             return;
-     }
- }
+    }
+}
 
 
 // Make a time signature noteblock
@@ -234,7 +234,7 @@ struct noteblock* make_key_signature (
     char* pText = get_ptr_to_text (pNoteblock);
     draw_staff (pText, NOTEBLOCK_WIDTH, STD_STAFF_BITSTR);
 
-    const char LAST_IDX = sizeof (KEY_SIGNATURE_ROWS) - 1;
+    const int LAST_IDX = sizeof (KEY_SIGNATURE_ROWS) - 1;
     int dir = (bits01to16 & 0b100) ? -1 : 1; // Direction - loop backwards or forwards through KEY_SIGNATURE_ROWS
     int col = 0;
     for (int i = 0; i <= LAST_IDX; ++i) {

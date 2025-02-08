@@ -29,7 +29,8 @@
 // that represent it, but this doesn't drive functionality.
 
 #define BYTE_GROUP_TYPE_TERMINATOR  (0b00000000)
-#define BYTE_GROUP_TYPE_NOTE        (0b00000001)
+#define BYTE_GROUP_TYPE_NOTE_NN     (0b00000001)
+#define BYTE_GROUP_TYPE_NOTE_NB     (0b00000101)
 #define BYTE_GROUP_TYPE_TIME_CHANGE (0b00000010)
 #define BYTE_GROUP_TYPE_KEY_CHANGE  (0b00000011)
 #define BYTE_GROUP_TYPE_BARLINE     (0b00000100)
@@ -45,9 +46,13 @@ int byte_group_type (
 ){
     // At this point, we know nothing about byte1
     switch (byte1 & 0b11) {
-        case 0b01: return BYTE_GROUP_TYPE_NOTE;
         case 0b10: return BYTE_GROUP_TYPE_TIME_CHANGE;
         case 0b11: return BYTE_GROUP_TYPE_KEY_CHANGE;
+    }
+    // At this point, we know byte1 & 0b11 == 0b00 or 0b01
+    switch (byte1 & 0b111) {
+        case 0b001: return BYTE_GROUP_TYPE_NOTE_NN;
+        case 0b101: return BYTE_GROUP_TYPE_NOTE_NB;
     }
     // At this point, we know byte1 & 0b11 == 0b00
     switch (byte1 & 0b1100) {
@@ -71,25 +76,22 @@ int byte_group_type (
 // Functions for parsing byte groups to noteblocks
 //*************************************************
 
-// Updates the parseInfo variable, which stores three sub-values between calls to parse_byte_group.
+// Updates the parseInfo variable, which stores two sub-value bytes between calls to parse_byte_group.
 //   parseInfo byte 1 - byte group type of current byte group.
-//   parseInfo byte 2 - byte2 of most recent note-type noteblock, zeroed between measures.
-//   parseInfo byte 3 - byte2 of most recent note-type noteblock, preserved across measures.
+//   parseInfo byte 2 - byte 1 of most recent note (NN or NB) byte group, preserved across measures.
+//   parseInfo bytes 3-4 - unused, always 0.
 unsigned int update_parse_info (
     unsigned int  oldParseInfo,     // parseInfo from previous call to parse_byte_group.
     unsigned char newByteGroupType, // BYTE_GROUP_TYPE constant from current call to parse_byte_group.
-    unsigned char newByte2          // Used only if new byte group type is note - bits 17-32 of note encoding.
+    unsigned char newNoteByte1      // Used only if new byte group is NN or NB - bits 1-8 of note encoding.
 ){
-    switch (newByteGroupType) {
-        case BYTE_GROUP_TYPE_NOTE:
-            // Set bytes 2 and 3 to newByte2, byte 1 to newByteGroupType
-            return (newByte2 << 16) | (newByte2 << 8) | newByteGroupType;
-        case BYTE_GROUP_TYPE_BARLINE:
-            // Preserve byte 3, zero byte 2, set byte 1 to newByteGroupType
-            return (oldParseInfo & 0x00FF0000) | newByteGroupType;
-        default:
-            // Preserve bytes 3 and 2, set byte 1 to newByteGroupType
-            return (oldParseInfo & 0x00FFFF00) | newByteGroupType;
+    if (newByteGroupType == BYTE_GROUP_TYPE_NOTE_NN || newByteGroupType == BYTE_GROUP_TYPE_NOTE_NB) {
+        // Set byte 3 to newByte2, byte 1 to newByteGroupType
+        return (newNoteByte1 << 8) | newByteGroupType;
+    }
+    else {
+        // Preserve byte 3, set byte 1 to newByteGroupType
+        return (oldParseInfo & 0x0000FF00) | newByteGroupType;
     }
 }
 
@@ -148,11 +150,19 @@ int parse_byte_group (
             // 1 byte
             pNewNoteblock = make_time_signature (byte1);
             break;
-        case BYTE_GROUP_TYPE_NOTE:
+        case BYTE_GROUP_TYPE_NOTE_NN:
             // 2 bytes
             byte2 = pBytes[*pIndex]; ++(*pIndex);
             if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
-            pNewNoteblock = make_note (byte1, byte2, *pParseInfo);
+            pNewNoteblock = make_nn (byte1, byte2, *pParseInfo);
+            break;
+        case BYTE_GROUP_TYPE_NOTE_NB:
+            // 3 bytes
+            byte2 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte2 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            byte3 = pBytes[*pIndex]; ++(*pIndex);
+            if (byte3 == 0) { return PARSE_RESULT_UNEXPECTED_TERMINATOR; }
+            pNewNoteblock = make_nb(byte1, byte2, byte3, *pParseInfo);
             break;
         case BYTE_GROUP_TYPE_BARLINE:
             // 1 byte
@@ -187,7 +197,7 @@ int parse_byte_group (
     }
 
     // Update parseInfo
-    *pParseInfo = update_parse_info (*pParseInfo, (unsigned char)byteGroupType, byte2);
+    *pParseInfo = update_parse_info (*pParseInfo, (unsigned char)byteGroupType, byte1);
 
     return PARSE_RESULT_PARSED_NOTEBLOCK;
 }
@@ -487,17 +497,20 @@ int get_example_bytes_width (
     if (pExampleWidth != NULL) *pExampleWidth = 0;
     if (ppExampleBytes == NULL || pExampleWidth == NULL) return 0;
 
-    *ppExampleBytes =
+    const unsigned char* pExampleBytes =
         (typeArg == NULL || strcmp(typeArg, "") == 0) ? EXAMPLE_BYTES :
         (strcmp (typeArg, "clef") == 0) ? DTL_BYTES_CLEF :
         (strcmp (typeArg, "key") == 0) ? DTL_BYTES_KEY_CHANGE :
         (strcmp (typeArg, "time") == 0) ? DTL_BYTES_TIME_CHANGE :
+        (strcmp (typeArg, "rest") == 0) ? DTL_BYTES_REST :
         (strcmp (typeArg, "note") == 0) ? DTL_BYTES_NOTE :
+        (strcmp (typeArg, "beam") == 0) ? DTL_BYTES_BEAMED_NOTE :
         (strcmp (typeArg, "text") == 0) ? DTL_BYTES_TEXT :
         (strcmp (typeArg, "barline") == 0) ? DTL_BYTES_BARLINE :
         NULL;
-    if (*ppExampleBytes == NULL) return 0;
-    *pExampleWidth = (*ppExampleBytes == EXAMPLE_BYTES) ? EXAMPLE_WIDTH : DTL_WIDTH;
+    if (pExampleBytes == NULL) return 0;
+    *pExampleWidth = (pExampleBytes == EXAMPLE_BYTES) ? EXAMPLE_WIDTH : DTL_WIDTH;
+    *ppExampleBytes = (unsigned char*)pExampleBytes; // Type cast from const to mutable
     return 1;
 }
 
@@ -546,7 +559,6 @@ char* str_format_example_bytes (
     size_t countChars = (countBytes * 11) + countLines + 1; // +countLines for '\n's, +1 for char 0
     char* str = malloc (countChars);
     if (str == NULL) return NULL;
-
     // Format bytes into string
     size_t strIndex = 0;
     size_t byteIndex = 0;

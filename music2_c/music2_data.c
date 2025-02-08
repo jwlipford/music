@@ -17,44 +17,44 @@ const unsigned char EXAMPLE_BYTES[] = {
     0b00100000, // Treble clef
     0b00000111, 0b11000000, 0b00000111, 0b11110110, // E major (C# minor) key signature - C#, D#, F#, G#
     0b00111010, // 4|4 time signature
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
+    0b00000001, 0b01100000, // Eighth rest
+    0b00000101, 0b00110110, 0b11000001, // Low G, eighth note, stem length 4, 1 right beam
     0b00101000, 0b10111010, 0b00100010, // Dynamics text " mp  "
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
+    0b00000101, 0b10100111, 0b11000101, // Low A, eighth note, stem length 3, 1 left and right beam, dotted
+    0b00000101, 0b10110110, 0b11000101, // Low G, eighth note, stem length 4, 1 left and right beam, dotted
+    0b00000101, 0b00100111, 0b11000100, // Low A, eighth note, stem length 3, 1 left beam
+    0b00000001, 0b01010100, // Low E, quarter
     0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
+    0b00000001, 0b01100000, // Eighth rest
+    0b00000101, 0b00110110, 0b11000001, // Low G, eighth note, stem length 4, 1 right beam
+    0b00000101, 0b10100111, 0b11000101, // Low A, eighth note, stem length 3, 1 left and right beam, dotted
+    0b00000101, 0b10110110, 0b11000101, // Low G, eighth note, stem length 4, 1 left and right beam, dotted
+    0b00000101, 0b00100111, 0b11000100, // Low A, eighth note, stem length 3, 1 left beam
+    0b00000001, 0b01010100, // Low E, quarter
     0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
-    0b00010001, 0b00000101, // Low E, quarter
+    0b00000001, 0b01100000, // Eighth rest
+    0b00000101, 0b00110110, 0b11000001, // Low G, eighth note, stem length 4, 1 right beam
+    0b00000101, 0b10100111, 0b11000101, // Low A, eighth note, stem length 3, 1 left and right beam, dotted
+    0b00000101, 0b10110110, 0b11000101, // Low G, eighth note, stem length 4, 1 left and right beam, dotted
+    0b00000101, 0b00100111, 0b11000100, // Low A, eighth note, stem length 3, 1 left beam
+    0b00000001, 0b01010100, // Low E, quarter
     0b00000100, // Single barline
-    0b00000001, 0b00000110, // Eighth rest
-    0b00011001, 0b00001010, // Low G, beamed eighth (left and right, tall stem)
+    0b00000001, 0b01100000, // Eighth rest
+    0b00000101, 0b00110110, 0b11000001, // Low G, eighth note, stem length 4, 1 right beam
     0b00101000, 0b00110010, 0b00110011, // Dynamics text "  <<<"
-    0b00011101, 0b00011000, // Low A, beamed eighth (left and right), dotted
+    0b00000101, 0b10100111, 0b11000101, // Low A, eighth note, stem length 3, 1 left and right beam, dotted
     0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00011001, 0b00011010, // Low G, beamed eighth (left and right, tall stem), dotted
+    0b00000101, 0b10110110, 0b11000101, // Low G, eighth note, stem length 4, 1 left and right beam, dotted
     0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00011101, 0b00001100, // Low A, beamed eighth (left only)
+    0b00000101, 0b00100111, 0b11000100, // Low A, eighth note, stem length 3, 1 left beam
     0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00010001, 0b00000110, // Low E, lone eighth
+    0b00000001, 0b01100100, // Low E, eighth
     0b00111000, 0b00110011, 0b00110011, // Dynamics text "<<<<<"
-    0b00100101, 0b01001001, // High C, beamed sixteenth (left and right), staccato
+    0b00100101, 0b01111001, 0b11000010,  // High C, sixteenth note, downward, stem length 4, 2 right beams, staccato
     0b00111000, 0b10010010, 0b00010010, // Dynamics text "< f  "
-    0b00100101, 0b01101101, // High C, beamed sixteenth (left only), tied to next, staccato
+    0b10100101, 0b01111001, 0b11001000,  // High C, sixteenth note, downward, stem length 4, 2 left beams, staccato, tied
     0b10000100, // Left repeat barline :| slim
-    0b00100101, 0b00100100, // High C, half, tied to nothing
+    0b10000001, 0b01001001, // High C, half, tied to nothing
     0           // Terminator
 };
 
@@ -153,9 +153,164 @@ const unsigned char DTL_BYTES_TIME_CHANGE[] = {
     0           // Terminator
 };
 
-// Detailed example of notes and rests. Just one for now.
+// Detailed example of rests.
+const unsigned char DTL_BYTES_REST[] = {
+    0b00000001, 0b00100000, // Breve rest
+    0b00000001, 0b00110000, // Whole rest
+    0b00000001, 0b01000000, // Half rest
+    0b00000001, 0b01010000, // Quarter rest
+    0b00000001, 0b01100000, // Eighth rest
+    0b00000001, 0b01110000, // Sixteenth rest
+    0b00000001, 0b10100000, // Breve rest, dotted
+    0b00000001, 0b10110000, // Whole rest, dotted
+    0b00000001, 0b11000000, // Half rest, dotted
+    0b00000001, 0b11010000, // Quarter rest, dotted
+    0b00000001, 0b11100000, // Eighth rest, dotted
+    0b00000001, 0b11110000, // Sixteenth rest, dotted
+    0           // Terminator
+};
+
+// Detailed example of non-beamed notes.
 const unsigned char DTL_BYTES_NOTE[] = {
-    0b00010001, 0b0000011, // One note
+    // Pitches
+    0b00111010, // 4|4 time change
+    0b00000001, 0b01110001, // Low B, sixteenth
+    0b00000001, 0b01110010, // Low C, sixteenth
+    0b00000001, 0b01110011, // Low D, sixteenth
+    0b00000001, 0b01110100, // Low E, sixteenth
+    0b00000001, 0b01110101, // Low F, sixteenth
+    0b00000001, 0b01110110, // Low G, sixteenth
+    0b00000001, 0b01110111, // Low A, sixteenth
+    0b00000001, 0b01111000, // Mid B, sixteenth
+    0b00000001, 0b01111001, // High C, sixteenth
+    0b00000001, 0b01111010, // High D, sixteenth
+    0b00000001, 0b01111011, // High E, sixteenth
+    0b00000001, 0b01111100, // High F, sixteenth
+    0b00000001, 0b01111101, // High G, sixteenth
+    0b00000001, 0b01111110, // High A, sixteenth
+    0b00000001, 0b01101111, // High B, eighth
+    0b00000100, // Single barline
+    // Accidentals and Articulations
+    0b00000001, 0b01010111, // Low A, quarter
+    0b00101001, 0b01011000, // Mid B, quarter, flat, staccato
+    0b01010001, 0b01011001, // High C, quarter, natural, accent
+    0b01111001, 0b01011010, // High D, quarter, sharp, tenuto
+    0b00000100, // Single barline
+    0b01010100, // Blank column
+    // Durations
+    0b10010110, // 10|2 time change
+    0b00000001, 0b10101001, // High C, breve, dotted
+    0b00000001, 0b00101001, // High C, breve, not dotted
+    0b00000100, // Single barline
+    0b10011010, // 10|4 time change
+    0b00000001, 0b10111001, // High C, whole, dotted
+    0b00000001, 0b00111001, // High C, whole, not dotted
+    0b00000100, // Single barline
+    0b01001010, // 5|4 time change
+    0b00000001, 0b11001001, // High C, half, dotted
+    0b00000001, 0b01001001, // High C, half, not dotted
+    0b00000100, // Single barline
+    0b01001110, // 5|8 time change
+    0b00000001, 0b11011001, // High C, quarter, dotted
+    0b00000001, 0b01011001, // High C, quarter, not dotted
+    0b00000100, // Single barline
+    0b01001110, // 5|8 time change
+    0b00000001, 0b11101001, // High C, eighth, dotted
+    0b00000001, 0b01101001, // High C, eighth, not dotted
+    0b00000001, 0b11111001, // High C, sixteenth, dotted
+    0b00000001, 0b01111001, // High C, sixteenth, not dotted
+    0b00000001, 0b01110000, // Sixteenth rest
+    0b00000001, 0b11111001, // High C, sixteenth, dotted
+    0b00000100, // Single barline
+    // Ties
+    0b00011010, // 2|4 time change
+    0b10000001, 0b01010111, // Low A, quarter, not dotted, tied
+    0b00000001, 0b01100111, // Low A, eighth, not dotted
+    0b10000001, 0b01101001, // High C, eighth, not dotted, tied across barline
+    0b01100100, // Single barline, slim
+    0b00000001, 0b01101001, // High C, eighth, not dotted
+    0b10000001, 0b01100111, // Low A, eighth, not dotted, tied
+    0b00000001, 0b01010111, // Low A, quarter, not dotted
+    0b00000100, // Single barline
+    0b10000001, 0b01111001, // High C, sixteenth, not dotted, tied
+    0b10010001, 0b11101001, // High C, eighth, natural, dotted, tied
+    0b00000001, 0b01011001, // High C, quarter, not dotted
+    0b00010100, // Double wide barline
+    0           // Terminator
+};
+
+// Detailed example of beamed notes.
+const unsigned char DTL_BYTES_BEAMED_NOTE[] = {
+    0b00111010, // 4|4 time change
+    // Four beamed upward sixteenth notes, low B to low E, stem lengths 4 to 1
+    0b00000101, 0b00110001, 0b11000010,
+    0b00000101, 0b00100010, 0b11001010,
+    0b00000101, 0b00010011, 0b11001010,
+    0b00000101, 0b00000100, 0b11001000,
+    // Four beamed upward sixteenth notes, low F to mid B, stem lengths 4 to 1
+    0b00000101, 0b00110101, 0b11000010,
+    0b00000101, 0b00100110, 0b11001010,
+    0b00000101, 0b00010111, 0b11001010,
+    0b00000101, 0b00001000, 0b11001000,
+    // Two beamed downward sixteenth notes, high C to high D, stem lengths 3 to 4
+    0b00000101, 0b01101001, 0b11000010,
+    0b00000101, 0b01111010, 0b11001000,
+    // Two beamed downward sixteenth notes, high E to high F, stem lengths 3 to 4
+    0b00000101, 0b01101011, 0b11000010,
+    0b00000101, 0b01111100, 0b11001000,
+    // Two beamed sixteenth and one beamed eighth note, high G to high B, stem lengths 2 to 4
+    0b00000101, 0b01011101, 0b11000010,
+    0b00000101, 0b01101110, 0b11011010,
+    0b00000101, 0b01111111, 0b11000100,
+    0b00000100, // Single barline
+    // Four quarter notes, low A to high D, stem length 2
+    0b00000101, 0b00010111, 0b11000000, // None, none, upward
+    0b00101101, 0b00011000, 0b11000000, // Flat, staccato, upward
+    0b01010101, 0b01011001, 0b11000000, // Natural, accent, downward
+    0b01111101, 0b01011010, 0b11000000, // Sharp, tenuto, downward
+    0b00000100, // Single barline
+    // Two quarter notes on high C, downward, stem length 3
+    0b01001110, // 5|8 time change
+    0b00000101, 0b11101001, 0b11000000, // Dotted quarter note
+    0b00000101, 0b01101001, 0b11000000, // Quarter note
+    0b00000100, // Single barline
+    // Several pairs of beamed notes on high C, downward, and one rest
+    0b00101010, // 3|4 time change
+    0b00000101, 0b11101001, 0b11000001, // Dotted eighth note, stem length 3, 1 right beam
+    0b00000101, 0b01101001, 0b11000100, // Eighth note, stem length 3, 1 left beam
+    0b00000101, 0b11111001, 0b11000010, // Dotted sixteenth note, stem length 4, 2 right beams
+    0b00000101, 0b01111001, 0b11001000, // Sixteenth note, stem length 4, 2 left beams
+    0b00000101, 0b11111001, 0b11000011, // Dotted 32nd note, stem length 4, 3 right beams
+    0b00000101, 0b01111001, 0b11001100, // 32nd note, stem length 4, 3 left beams
+    0b00000001, 0b01110000, // Sixteenth rest
+    0b00000101, 0b11111001, 0b11010011, // Dotted 32nd note, stem length 4, 3 right beams
+    0b00000101, 0b11111001, 0b11001000, // Dotted sixteenth note, stem length 4, 2 left beams
+    0b00000100, // Single barline
+    // Notes with ties
+    0b00011010, // 2|4 time change
+    0b10000101, 0b00100111, 0b11000000, // Low A, upward, stem length 3, no beams, tied
+    0b00000101, 0b01010111, 0b11000001, // Low A, downward, stem length 2, 1 right beam
+    0b10000101, 0b01111001, 0b11000100, // High C, downward, stem length 4, 1 left beam, tied across barline
+    0b01100100, // Single barline, slim
+    0b00000101, 0b01111001, 0b11000001, // High C, downward, stem length 4, 1 right beam
+    0b10000101, 0b01010111, 0b11000100, // Low A, downward, stem length 2, 1 left beam, tied
+    0b00000101, 0b00100111, 0b11000000, // Low A, upward, stem length 3, no beams
+    0b00000100, // Single barline
+    0b10000101, 0b01101001, 0b11010010, // High C, sixteenth note, downward, stem length 3, 2 right beams, tied
+    0b10010101, 0b11101001, 0b11000100, // High C, dotted eighth note, downward, stem length 3, 1 left beam, natural, tied
+    0b00000101, 0b01101001, 0b11000000, // High C, quarter note, downward, stem length 3
+    0b00000100, // Single barline
+    // Eight middle B quarter notes with different orientations and stem lengths
+    0b01111010, // 8|4 time change
+    0b00000101, 0b01111000, 0b11000000, // Downward, stem length 4
+    0b00000101, 0b01101000, 0b11000000, // Downward, stem length 3
+    0b00000101, 0b01011000, 0b11000000, // Downward, stem length 2
+    0b00000101, 0b01001000, 0b11000000, // Downward, stem length 1
+    0b00000101, 0b00001000, 0b11000000, // Upward, stem length 1
+    0b00000101, 0b00011000, 0b11000000, // Upward, stem length 2
+    0b00000101, 0b00101000, 0b11000000, // Upward, stem length 3
+    0b00000101, 0b00111000, 0b11000000, // Upward, stem length 4
+    0b00010100, // Double wide barline
     0           // Terminator
 };
 

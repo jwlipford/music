@@ -6,4 +6,5 @@
 
 #pragma once
 
-struct noteblock* make_note (unsigned char byte1, unsigned char byte2, unsigned int  parseInfo);
+struct noteblock* make_nn (unsigned char byte1, unsigned char byte2, unsigned int  parseInfo);
+struct noteblock* make_nb (unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned int  parseInfo);
